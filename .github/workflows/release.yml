@@ -36,13 +36,13 @@ jobs:
           workspaces: "./src-tauri -> target"
 
       - name: 安装 Tauri CLI
-        run: npm install -g @tauri-apps/cli@^2
+        run: npm install -g @tauri-apps/cli@2.12.2
 
-      - name: 构建安装包（Windows: 仅 NSIS .exe）
+      - name: "构建安装包（Windows: 仅 NSIS .exe）"
         if: runner.os == 'Windows'
         run: tauri build --bundles nsis
 
-      - name: 构建安装包（macOS: .app + .dmg）
+      - name: "构建安装包（macOS: .app + .dmg）"
         if: runner.os == 'macOS'
         run: tauri build
 
@@ -100,6 +100,7 @@ jobs:
           distribution: temurin
 
       # 手动安装 Android SDK（android-actions/setup-android 的 sdkmanager tools 已失效）
+      # 注意：API 37 的平台包名是 platforms;android-37.0（SDK 新版本号规则）
       - name: 安装 Android SDK（cmdline-tools + 平台 + 构建工具）
         shell: bash
         run: |
@@ -113,7 +114,7 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
-          for p in "platform-tools" "platforms;android-34" "platforms;android-35" "build-tools;34.0.0" "build-tools;35.0.0"; do
+          for p in "platform-tools" "platforms;android-37.0" "build-tools;37.0.0"; do
             "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" "$p" || echo "跳过不可用的包: $p"
           done
 
@@ -125,7 +126,7 @@ jobs:
           link-to-sdk: true
 
       - name: 安装 Tauri CLI
-        run: npm install -g @tauri-apps/cli@^2
+        run: npm install -g @tauri-apps/cli@2.12.2
 
       - name: 初始化 Android 工程
         run: tauri android init --ci

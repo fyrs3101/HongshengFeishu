@@ -30,3 +30,7 @@ zip = "0.6"
 opt-level = 2
 lto = true
 strip = true
+
+# 安卓 debug 包同样剥离符号，显著减小 APK 体积（不影响 JNI 导出符号）
+[profile.dev]
+strip = "symbols"

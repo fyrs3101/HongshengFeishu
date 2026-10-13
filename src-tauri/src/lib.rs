@@ -104,6 +104,7 @@ fn send_file(
     transfer::send_file(app, state.0.clone(), peer_uid, path)
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let state = AppState::new();
     tauri::Builder::default()

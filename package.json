@@ -1,0 +1,8 @@
+{
+  "name": "hongsheng-feishu",
+  "private": true,
+  "version": "1.0.1",
+  "scripts": {
+    "tauri": "tauri"
+  }
+}
