@@ -41,6 +41,11 @@
     "macOS": {
       "minimumSystemVersion": "10.15",
       "dmg": {}
+    },
+    "windows": {
+      "nsis": {
+        "languages": ["SimpChinese", "English"]
+      }
     }
   }
 }
