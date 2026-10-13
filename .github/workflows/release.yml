@@ -55,8 +55,11 @@ jobs:
           mkdir -p release-artifacts
           B=src-tauri/target/release/bundle
           shopt -s nullglob
-          for f in "$B"/dmg/*.dmg; do cp "$f" "release-artifacts/鸿升飞书-${VER}-macOS-arm64.dmg"; done
-          for f in "$B"/macos/*.app.tar.gz; do cp "$f" "release-artifacts/鸿升飞书-${VER}-macOS-arm64.app.tar.gz"; done
+          # 注意：GitHub Release 的资产文件名不支持中文（非 ASCII 字符会被平台剥离，
+          # 导致下载文件丢失软件名），故统一使用拼音 ASCII 命名；
+          # 安装后软件名称仍为「鸿升飞书」
+          for f in "$B"/dmg/*.dmg; do cp "$f" "release-artifacts/HongshengFeishu-${VER}-macOS-arm64.dmg"; done
+          for f in "$B"/macos/*.app.tar.gz; do cp "$f" "release-artifacts/HongshengFeishu-${VER}-macOS-arm64.app.tar.gz"; done
           ls -la release-artifacts
 
       - name: 规范产物文件名（Windows）
@@ -68,7 +71,7 @@ jobs:
           mkdir -p release-artifacts
           B=src-tauri/target/release/bundle
           shopt -s nullglob
-          for f in "$B"/nsis/*-setup.exe; do cp "$f" "release-artifacts/鸿升飞书-${VER}-windows-x64-setup.exe"; done
+          for f in "$B"/nsis/*-setup.exe; do cp "$f" "release-artifacts/HongshengFeishu-${VER}-windows-x64-setup.exe"; done
           ls -la release-artifacts
 
       - name: 上传到 Release
@@ -76,6 +79,33 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: release-artifacts/*
+          body: |
+            ## 鸿升飞书 v1.0.1 —— macOS / Windows / Android 三平台
+
+            开发者：鸿升周老师 ｜ 通信协议：HSFP（同一局域网自动发现，功能对标飞鸽传书）
+
+            ### 安装包下载
+
+            | 安装包 | 适用平台 | 安装方式 |
+            | --- | --- | --- |
+            | `HongshengFeishu-1.0.1-macOS-arm64.dmg` | macOS（Apple Silicon：M1/M2/M3/M4 等） | 双击打开磁盘映像，将「鸿升飞书」拖入「应用程序」文件夹 |
+            | `HongshengFeishu-1.0.1-windows-x64-setup.exe` | Windows 10 / 11（64 位） | 双击运行安装程序，按提示完成安装 |
+            | `HongshengFeishu-1.0.1-android.apk` | Android 8.0 及以上（arm64 / armeabi，含华为等机型） | 下载到手机后点击安装（旁加载） |
+
+            > 说明：GitHub 的下载文件名不支持中文，故安装包使用拼音命名；安装完成后，设备上显示的软件名称仍为「鸿升飞书」。
+
+            ### 华为手机安装 APK 步骤
+
+            1. 将 `HongshengFeishu-1.0.1-android.apk` 下载到手机（或用数据线、微信文件传输助手传到手机）；
+            2. 进入「设置 → 安全 → 更多安全设置」，允许「外部来源应用下载」；
+            3. 点击 APK 文件，如弹出「未知应用」提示，按指引允许本次安装；
+            4. 打开「鸿升飞书」，确保手机与电脑连接同一 Wi-Fi，即可自动发现好友，互传文字、文件与文件夹。
+
+            ### 使用提示
+
+            - 手机与电脑必须在**同一局域网（同一 Wi-Fi）**内才能自动发现彼此；
+            - 支持文字消息、单文件、整文件夹传输；
+            - 若列表中找不到对方，请检查防火墙是否放行本软件，或双方重启软件重试。
           # 新版 GitHub 平台限制 GITHUB_TOKEN 更新 Release，需用 PAT；
           # 未配置 RELEASE_TOKEN secret 时回退到 GITHUB_TOKEN
           token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
@@ -158,9 +188,9 @@ jobs:
           mkdir -p release-apk
           for f in $(find src-tauri/gen/android -name "*.apk"); do
             case "$f" in
-              *aarch64*|*arm64*) dst="鸿升飞书-${VER}-android-arm64.apk" ;;
-              *armv7*|*armeabi*) dst="鸿升飞书-${VER}-android-armv7.apk" ;;
-              *) dst="鸿升飞书-${VER}-android.apk" ;;
+              *aarch64*|*arm64*) dst="HongshengFeishu-${VER}-android-arm64.apk" ;;
+              *armv7*|*armeabi*) dst="HongshengFeishu-${VER}-android-armv7.apk" ;;
+              *) dst="HongshengFeishu-${VER}-android.apk" ;;
             esac
             cp "$f" "release-apk/$dst"
             echo "打包: $dst"
@@ -172,4 +202,31 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: release-apk/*.apk
+          body: |
+            ## 鸿升飞书 v1.0.1 —— macOS / Windows / Android 三平台
+
+            开发者：鸿升周老师 ｜ 通信协议：HSFP（同一局域网自动发现，功能对标飞鸽传书）
+
+            ### 安装包下载
+
+            | 安装包 | 适用平台 | 安装方式 |
+            | --- | --- | --- |
+            | `HongshengFeishu-1.0.1-macOS-arm64.dmg` | macOS（Apple Silicon：M1/M2/M3/M4 等） | 双击打开磁盘映像，将「鸿升飞书」拖入「应用程序」文件夹 |
+            | `HongshengFeishu-1.0.1-windows-x64-setup.exe` | Windows 10 / 11（64 位） | 双击运行安装程序，按提示完成安装 |
+            | `HongshengFeishu-1.0.1-android.apk` | Android 8.0 及以上（arm64 / armeabi，含华为等机型） | 下载到手机后点击安装（旁加载） |
+
+            > 说明：GitHub 的下载文件名不支持中文，故安装包使用拼音命名；安装完成后，设备上显示的软件名称仍为「鸿升飞书」。
+
+            ### 华为手机安装 APK 步骤
+
+            1. 将 `HongshengFeishu-1.0.1-android.apk` 下载到手机（或用数据线、微信文件传输助手传到手机）；
+            2. 进入「设置 → 安全 → 更多安全设置」，允许「外部来源应用下载」；
+            3. 点击 APK 文件，如弹出「未知应用」提示，按指引允许本次安装；
+            4. 打开「鸿升飞书」，确保手机与电脑连接同一 Wi-Fi，即可自动发现好友，互传文字、文件与文件夹。
+
+            ### 使用提示
+
+            - 手机与电脑必须在**同一局域网（同一 Wi-Fi）**内才能自动发现彼此；
+            - 支持文字消息、单文件、整文件夹传输；
+            - 若列表中找不到对方，请检查防火墙是否放行本软件，或双方重启软件重试。
           token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
