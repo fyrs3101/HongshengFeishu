@@ -76,6 +76,9 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: release-artifacts/*
+          # 新版 GitHub 平台限制 GITHUB_TOKEN 更新 Release，需用 PAT；
+          # 未配置 RELEASE_TOKEN secret 时回退到 GITHUB_TOKEN
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
   # ========== 安卓版：.apk（适配华为等机型，旁加载安装）==========
   android:
@@ -128,16 +131,22 @@ jobs:
           ndk-version: r26d
           link-to-sdk: true
 
-      - name: 安装 Tauri CLI
-        run: npm install -g @tauri-apps/cli@2.12.2
+      # 必须本地安装 @tauri-apps/cli 并通过 npm 调用：
+      # 1) tauri CLI 会检测调用它的包管理器，直接调用全局二进制会生成
+      #    "node tauri ..." 版 BuildTask.kt，导致安卓构建报
+      #    Cannot find module '.../src-tauri/tauri'
+      # 2) gradle 构建时 BuildTask 会执行 npm run -- tauri ...，
+      #    需要仓库根目录 node_modules/.bin/tauri 存在
+      - name: 安装依赖（含本地 Tauri CLI）
+        run: npm install --no-audit --no-fund
 
       - name: 初始化 Android 工程
-        run: tauri android init --ci
+        run: npm run tauri -- android init --ci
         env:
           CI: "true"
 
       - name: 构建 APK（arm64 + armv7，debug 签名可直接安装）
-        run: tauri android build --apk --debug --target aarch64 --target armv7 --ci
+        run: npm run tauri -- android build --apk --debug --target aarch64 --target armv7 --ci
         env:
           NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
           CI: "true"
@@ -163,3 +172,4 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: release-apk/*.apk
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
