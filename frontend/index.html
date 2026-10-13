@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>鸿升飞书</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- 侧边栏 -->
+      <aside class="sidebar">
+        <header class="brand">
+          <div class="logo">飞</div>
+          <div class="brand-text">
+            <div class="brand-name">鸿升飞书</div>
+            <div class="brand-sub" id="selfNick">鸿升周老师</div>
+          </div>
+        </header>
+
+        <div class="search">
+          <input id="searchInput" type="text" placeholder="搜索联系人 / 主机" />
+        </div>
+
+        <div class="section-title">
+          局域网联系人 <span id="onlineCount" class="badge">0</span>
+        </div>
+
+        <ul id="peerList" class="peer-list">
+          <li class="empty">正在发现网段内的同事…</li>
+        </ul>
+
+        <footer class="sidebar-foot">
+          <button id="settingsBtn" class="ghost">设置昵称</button>
+        </footer>
+      </aside>
+
+      <!-- 聊天区 -->
+      <main class="chat" id="chatPane">
+        <div class="chat-empty" id="chatEmpty">
+          <div class="big-logo">飞</div>
+          <h2>鸿升飞书</h2>
+          <p>选择左侧联系人开始局域网聊天，或把文件拖进来直接发送。</p>
+          <p class="copyright">版权所有 © 鸿升周老师</p>
+        </div>
+
+        <div class="chat-active" id="chatActive" hidden>
+          <header class="chat-head">
+            <div class="peer-avatar" id="headAvatar">?</div>
+            <div class="peer-meta">
+              <div class="peer-name" id="headName">—</div>
+              <div class="peer-ip" id="headIp">—</div>
+            </div>
+          </header>
+
+          <div class="messages" id="messages"></div>
+
+          <div class="composer">
+            <button id="attachBtn" class="attach" title="发送文件 / 文件夹">＋</button>
+            <textarea
+              id="input"
+              rows="1"
+              placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+            ></textarea>
+            <button id="sendBtn" class="send">发送</button>
+          </div>
+        </div>
+
+        <div class="drop-overlay" id="dropOverlay">
+          <div class="drop-inner">松开以发送文件 / 文件夹</div>
+        </div>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

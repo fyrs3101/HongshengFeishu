@@ -1,0 +1,12 @@
+# Rust / Tauri 构建产物
+src-tauri/target/
+src-tauri/gen/
+src-tauri/Cargo.bundle*
+
+# 前端依赖与日志
+node_modules/
+build.log
+dist/
+
+# 系统垃圾
+.DS_Store

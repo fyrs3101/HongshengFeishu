@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "鸿升飞书",
+  "version": "1.0.0",
+  "identifier": "com.hongsheng.feishu",
+  "build": {
+    "frontendDist": "../frontend",
+    "devUrl": "http://localhost:1420"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "鸿升飞书",
+        "width": 980,
+        "height": 660,
+        "minWidth": 760,
+        "minHeight": 500,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "Utility",
+    "shortDescription": "鸿升飞书 · 局域网即时通讯与文件传输",
+    "longDescription": "鸿升飞书是一款面向局域网的即时通讯与文件传输工具，自动发现网段内同事、点对点收发消息与文件，无需服务器。版权所有：鸿升周老师。",
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "dmg": {}
+    }
+  }
+}
