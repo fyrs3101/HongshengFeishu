@@ -1,6 +1,6 @@
 [package]
 name = "hongsheng-feishu"
-version = "1.0.0"
+version = "1.0.1"
 description = "鸿升飞书 - 局域网即时通讯与文件传输"
 authors = ["鸿升周老师"]
 edition = "2021"
