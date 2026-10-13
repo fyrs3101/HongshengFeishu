@@ -27,7 +27,7 @@ jobs:
       - name: Rust 缓存
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: "./HongshengFeishu-Tauri/src-tauri -> target"
+          workspaces: "./src-tauri -> target"
 
       - name: 用 tauri-action 构建 macOS 包
         uses: tauri-apps/tauri-action@v0
@@ -41,7 +41,6 @@ jobs:
           # APPLE_PASSWORD:           # app-specific 密码
           # APPLE_TEAM_ID:
         with:
-          projectPath: HongshengFeishu-Tauri
           tagName: ${{ github.ref_name }}
           releaseName: "鸿升飞书 ${{ github.ref_name }}"
           releaseBody: "局域网即时通讯与文件传输 · 版权所有：鸿升周老师"
