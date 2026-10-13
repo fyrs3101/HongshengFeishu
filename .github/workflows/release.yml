@@ -53,11 +53,11 @@ jobs:
           set -eu
           VER="${GITHUB_REF_NAME#v}"
           mkdir -p release-artifacts
-          cd src-tauri/target/release/bundle
+          B=src-tauri/target/release/bundle
           shopt -s nullglob
-          for f in dmg/*.dmg; do cp "$f" "../../release-artifacts/鸿升飞书-${VER}-macOS-arm64.dmg"; done
-          for f in macos/*.app.tar.gz; do cp "$f" "../../release-artifacts/鸿升飞书-${VER}-macOS-arm64.app.tar.gz"; done
-          ls -la ../../release-artifacts
+          for f in "$B"/dmg/*.dmg; do cp "$f" "release-artifacts/鸿升飞书-${VER}-macOS-arm64.dmg"; done
+          for f in "$B"/macos/*.app.tar.gz; do cp "$f" "release-artifacts/鸿升飞书-${VER}-macOS-arm64.app.tar.gz"; done
+          ls -la release-artifacts
 
       - name: 规范产物文件名（Windows）
         if: runner.os == 'Windows'
@@ -66,10 +66,10 @@ jobs:
           set -eu
           VER="${GITHUB_REF_NAME#v}"
           mkdir -p release-artifacts
-          cd src-tauri/target/release/bundle
+          B=src-tauri/target/release/bundle
           shopt -s nullglob
-          for f in nsis/*-setup.exe; do cp "$f" "../../release-artifacts/鸿升飞书-${VER}-windows-x64-setup.exe"; done
-          ls -la ../../release-artifacts
+          for f in "$B"/nsis/*-setup.exe; do cp "$f" "release-artifacts/鸿升飞书-${VER}-windows-x64-setup.exe"; done
+          ls -la release-artifacts
 
       - name: 上传到 Release
         uses: softprops/action-gh-release@v2
@@ -112,6 +112,9 @@ jobs:
           rm -rf "$ANDROID_HOME/cmdline-tools/latest"
           mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          # 关键：ubuntu runner 预置了指向旧 SDK 的 ANDROID_SDK_ROOT，
+          # 与我们的 ANDROID_HOME 不一致会导致 AGP 报错，必须同步覆盖
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
           for p in "platform-tools" "platforms;android-37.0" "build-tools;37.0.0"; do
