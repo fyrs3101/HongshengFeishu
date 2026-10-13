@@ -1,4 +1,4 @@
-name: Build macOS
+name: Release
 
 # 触发：打 v* 标签自动发版；也可在 Actions 页面手动 Run workflow
 on:
@@ -11,8 +11,13 @@ permissions:
   contents: write
 
 jobs:
-  macos:
-    runs-on: macos-latest
+  # ========== 桌面版：macOS(.dmg/.app) + Windows(.msi/.exe) ==========
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,19 +34,85 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
 
-      - name: 用 tauri-action 构建 macOS 包
+      - name: 构建桌面版并发布
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # ===== 可选：填入以下 Secrets 即可自动 Developer ID 签名 + 公证 =====
-          # APPLE_CERTIFICATE:        # p12 的 base64
+          # ===== 可选：填入以下 Secrets 即可自动 macOS Developer ID 签名 + 公证 =====
+          # APPLE_CERTIFICATE:
           # APPLE_CERTIFICATE_PASSWORD:
-          # APPLE_SIGNING_IDENTITY:   # "Developer ID Application: ..."
-          # APPLE_ID:                 # 你的 Apple ID 邮箱
-          # APPLE_PASSWORD:           # app-specific 密码
+          # APPLE_SIGNING_IDENTITY:
+          # APPLE_ID:
+          # APPLE_PASSWORD:
           # APPLE_TEAM_ID:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "鸿升飞书 ${{ github.ref_name }}"
           releaseBody: "局域网即时通讯与文件传输 · 版权所有：鸿升周老师"
           prerelease: false
+
+  # ========== 安卓版：.apk（适配华为等机型，旁加载安装）==========
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 安装 Rust 工具链（含安卓目标）
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - name: 设置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+
+      - name: 设置 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 设置 Android NDK
+        uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r26d
+          link-to-sdk: true
+
+      - name: 安装 Tauri CLI
+        run: npm install -g @tauri-apps/cli@^2
+
+      - name: 初始化 Android 工程
+        run: tauri android init
+        env:
+          CI: "true"
+
+      - name: 构建 APK（arm64 + armv7，debug 签名可直接安装）
+        run: tauri android build --apk --debug --target aarch64 armv7 --ci
+        env:
+          NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          CI: "true"
+
+      - name: 整理 APK 文件名
+        run: |
+          mkdir -p release-apk
+          for f in $(find src-tauri/gen/android -name "*.apk"); do
+            case "$f" in
+              *arm64*) dst="鸿升飞书-1.0.0-android-arm64.apk" ;;
+              *armeabi*|*armv7*) dst="鸿升飞书-1.0.0-android-armv7.apk" ;;
+              *) dst="鸿升飞书-1.0.0-android.apk" ;;
+            esac
+            cp "$f" "release-apk/$dst"
+            echo "打包: $dst"
+          done
+          ls -la release-apk
+
+      - name: 上传 APK 到 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: release-apk/*.apk
