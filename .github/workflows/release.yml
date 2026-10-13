@@ -1,0 +1,48 @@
+name: Build macOS
+
+# 触发：打 v* 标签自动发版；也可在 Actions 页面手动 Run workflow
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust 工具链
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Rust 缓存
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./HongshengFeishu-Tauri/src-tauri -> target"
+
+      - name: 用 tauri-action 构建 macOS 包
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # ===== 可选：填入以下 Secrets 即可自动 Developer ID 签名 + 公证 =====
+          # APPLE_CERTIFICATE:        # p12 的 base64
+          # APPLE_CERTIFICATE_PASSWORD:
+          # APPLE_SIGNING_IDENTITY:   # "Developer ID Application: ..."
+          # APPLE_ID:                 # 你的 Apple ID 邮箱
+          # APPLE_PASSWORD:           # app-specific 密码
+          # APPLE_TEAM_ID:
+        with:
+          projectPath: HongshengFeishu-Tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: "鸿升飞书 ${{ github.ref_name }}"
+          releaseBody: "局域网即时通讯与文件传输 · 版权所有：鸿升周老师"
+          prerelease: false
