@@ -5,7 +5,7 @@
 
 > 这是用 **Tauri v2**（Rust 后端 + Web 前端）重写的版本，一套代码产出 macOS / Windows / Android 三端。
 
-## 功能（v1.1.0 飞鸽级）
+## 功能（v1.2.0 飞鸽级）
 
 **发现与状态**
 
@@ -59,11 +59,11 @@ cargo tauri build
 打标签即自动触发：
 
 ```bash
-git tag v1.1.0 && git push origin v1.1.0
+git tag v1.2.0 && git push origin v1.2.0
 # 到 GitHub → Releases → 下载：
-#   HongshengFeishu-1.1.0-macOS-arm64.dmg / .app.tar.gz
-#   HongshengFeishu-1.1.0-windows-x64-setup.exe
-#   HongshengFeishu-1.1.0-android.apk（华为等手机开启"旁加载"即可安装）
+#   HongshengFeishu-1.2.0-macOS-arm64.dmg / .app.tar.gz
+#   HongshengFeishu-1.2.0-windows-x64-setup.exe
+#   HongshengFeishu-1.2.0-android.apk（华为等手机开启"旁加载"即可安装）
 ```
 
 ### 3. 沙箱里我能验证什么

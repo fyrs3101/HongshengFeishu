@@ -600,19 +600,12 @@ fn mark_delivered(state: &Arc<Mutex<InnerState>>, app: &tauri::AppHandle, msg_id
 /// 收到消息时：应用不在前台则发系统通知
 fn notify_incoming(app: &tauri::AppHandle, state: &Arc<Mutex<InnerState>>, nick: &str, body: &str) {
     use tauri_plugin_notification::NotificationExt;
-    // 已知窗口标签：主窗口 + 设置/传输 + 各聊天窗口
-    let mut labels = vec![
-        "main".to_string(),
-        "settings".to_string(),
-        "transfers".to_string(),
-    ];
-    labels.extend(state.lock().unwrap().chat_windows.values().cloned());
-    let any_focused = labels.iter().any(|l| {
-        app.get_webview_window(l)
-            .map(|w| w.is_focused().unwrap_or(false))
-            .unwrap_or(false)
-    });
-    if any_focused {
+    // 单窗口架构：只需检测主窗口是否聚焦
+    let focused = app
+        .get_webview_window("main")
+        .map(|w| w.is_focused().unwrap_or(false))
+        .unwrap_or(false);
+    if focused {
         return;
     }
     let title = if nick.is_empty() {

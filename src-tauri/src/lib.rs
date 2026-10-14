@@ -12,10 +12,6 @@ use std::sync::OnceLock;
 use tauri::menu::{Menu, MenuItem};
 #[cfg(desktop)]
 use tauri::tray::TrayIconBuilder;
-#[cfg(desktop)]
-use tauri::WebviewUrl;
-#[cfg(desktop)]
-use tauri::WebviewWindowBuilder;
 use tauri::{Emitter, Manager, WindowEvent};
 
 use network::discovery;
@@ -74,17 +70,6 @@ fn apply_autostart(app: &tauri::AppHandle, enable: bool) {
             let _ = al.disable();
         }
     }
-}
-
-/// 联系人显示名（备注名优先）
-#[allow(dead_code)]
-fn display_name(settings: &Settings, nick: &str, uid: &str) -> String {
-    settings
-        .aliases
-        .get(uid)
-        .filter(|a| !a.trim().is_empty())
-        .cloned()
-        .unwrap_or_else(|| nick.to_string())
 }
 
 // ---- 生命周期 ----
@@ -422,11 +407,7 @@ fn win_close(window: tauri::Window) -> Result<(), String> {
 
 /// 打开（或聚焦）与某联系人的聊天窗口；移动端改为事件通知前端展示覆盖层
 #[tauri::command]
-fn open_chat_window(
-    app: tauri::AppHandle,
-    state: tauri::State<AppState>,
-    uid: String,
-) -> Result<(), String> {
+fn open_chat_window(app: tauri::AppHandle, state: tauri::State<AppState>, uid: String) -> Result<(), String> {
     #[cfg(mobile)]
     {
         let _ = state;
@@ -435,92 +416,23 @@ fn open_chat_window(
     }
     #[cfg(desktop)]
     {
-        let label = format!("chat-{}", uid);
-        if let Some(w) = app.get_webview_window(&label) {
-            let _ = w.show();
-            let _ = w.unminimize();
-            let _ = w.set_focus();
-            return Ok(());
-        }
-        let title = {
-            let s = state.0.lock().unwrap();
-            match s.peers.get(&uid) {
-                Some(p) => format!("与 {} 聊天 · 鸿升飞书", display_name(&s.settings, &p.nick, &uid)),
-                None => "聊天 · 鸿升飞书".to_string(),
-            }
-        };
-        let url = format!("chat.html?uid={}", uid);
-        WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
-            .title(title)
-            .inner_size(800.0, 620.0)
-            .min_inner_size(560.0, 440.0)
-            .decorations(false)
-            .center()
-            .build()
-            .map_err(|e| format!("打开聊天窗口失败: {}", e))?;
-        state.0.lock().unwrap().chat_windows.insert(uid, label);
+        // 单窗口架构：桌面端由前端直接在主区内嵌聊天视图，无需创建窗口
+        let _ = (app, state, uid);
         Ok(())
     }
 }
 
+/// 平台标识（前端据此适配 macOS 系统交通灯等）
 #[tauri::command]
-fn register_chat_window(state: tauri::State<AppState>, uid: String) {
-    let label = format!("chat-{}", uid);
-    state.0.lock().unwrap().chat_windows.insert(uid, label);
-}
-
-#[tauri::command]
-fn unregister_chat_window(state: tauri::State<AppState>, uid: String) {
-    state.0.lock().unwrap().chat_windows.remove(&uid);
-}
-
-/// 查询某联系人的聊天窗口是否已打开（主窗口据此决定是否累计未读）
-#[tauri::command]
-fn chat_window_open(state: tauri::State<AppState>, uid: String) -> bool {
-    state.0.lock().unwrap().chat_windows.contains_key(&uid)
-}
-
-/// 打开设置 / 传输管理窗口（移动端不使用，前端走页内 Tab）
-#[tauri::command]
-fn open_aux_window(app: tauri::AppHandle, kind: String) -> Result<(), String> {
-    #[cfg(mobile)]
-    {
-        let _ = (app, kind);
-        return Ok(());
-    }
-    #[cfg(desktop)]
-    {
-        let (label, url, title, w, h) = match kind.as_str() {
-            "settings" => (
-                "settings",
-                "settings.html".to_string(),
-                "设置 · 鸿升飞书".to_string(),
-                540.0,
-                620.0,
-            ),
-            _ => (
-                "transfers",
-                "transfers.html".to_string(),
-                "传输管理 · 鸿升飞书".to_string(),
-                760.0,
-                540.0,
-            ),
-        };
-        if let Some(wnd) = app.get_webview_window(label) {
-            let _ = wnd.show();
-            let _ = wnd.unminimize();
-            let _ = wnd.set_focus();
-            return Ok(());
-        }
-        WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url.into()))
-            .title(title)
-            .inner_size(w, h)
-            .min_inner_size(420.0, 380.0)
-            .decorations(false)
-            .center()
-            .build()
-            .map_err(|e| format!("打开窗口失败: {}", e))?;
-        Ok(())
+fn get_platform() -> String {
+    if cfg!(target_os = "macos") {
+        "macos".into()
+    } else if cfg!(target_os = "windows") {
+        "windows".into()
+    } else if cfg!(target_os = "android") {
+        "android".into()
+    } else {
+        "linux".into()
     }
 }
 
@@ -624,8 +536,7 @@ pub fn run() {
             send_text, send_file, begin_file_bytes, push_file_chunk, finish_file_bytes,
             respond_offer, decrypt_text,
             open_path, win_minimize, win_close,
-            open_chat_window, register_chat_window, unregister_chat_window,
-            chat_window_open, open_aux_window, refresh_peers,
+            open_chat_window, get_platform, refresh_peers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

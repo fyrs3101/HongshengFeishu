@@ -8,24 +8,24 @@
   </head>
   <body>
     <div class="app">
-      <!-- 桌面端自定义标题栏 -->
+      <!-- ===== 桌面端标题栏（对标飞鸽传书） ===== -->
       <header class="titlebar" id="deskTitlebar">
-        <div class="traffic">
+        <div class="traffic" id="trafficLights">
           <button class="tl-close" id="tlClose" title="关闭到托盘"></button>
           <button class="tl-min" id="tlMin" title="最小化"></button>
           <button class="tl-max" id="tlMax" title="最大化"></button>
         </div>
         <div class="win-title">
           <span class="brand-mark">飞</span>
-          鸿升飞书
-          <span class="t-sub" id="titleSub">局域网即时通讯</span>
+          <span class="brand-name">鸿升飞书</span>
+          <span class="t-sub">局域网即时通讯</span>
         </div>
         <div class="spacer"></div>
         <button class="tool-btn" id="groupSendBtn" title="向所有在线联系人广播消息">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
           群发
         </button>
-        <button class="tool-btn icon-only" id="refreshBtn" title="刷新联系人">
+        <button class="tool-btn icon-only" id="refreshBtn" title="刷新联系人列表">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </button>
         <button class="tool-btn icon-only" id="transfersBtn" title="传输管理">
@@ -36,7 +36,17 @@
         </button>
       </header>
 
-      <!-- 侧边栏（桌面为网格直接子元素；移动端由 main.js 移入 #tab-peers） -->
+      <!-- ===== 移动端头部 ===== -->
+      <header class="mobile-head">
+        <div class="mh-title" id="mhTitle">鸿升飞书</div>
+        <div class="mh-actions">
+          <button id="mRefresh" title="刷新">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- ===== 侧边栏（桌面为网格直接子元素；移动端由 JS 移入 #tab-peers） ===== -->
       <aside class="sidebar" id="sideBar">
         <div class="self-bar">
           <div class="avatar lg" id="selfAvatar">飞</div>
@@ -60,21 +70,9 @@
         </ul>
       </aside>
 
-      <!-- 移动端头部 -->
-      <header class="mobile-head">
-        <div class="mh-title" id="mhTitle">鸿升飞书</div>
-        <div class="mh-actions">
-          <button id="mRefresh" title="刷新">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-          </button>
-          <button id="mTransfers" title="传输管理">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 21h16"/></svg>
-          </button>
-        </div>
-      </header>
-
+      <!-- ===== 移动端主体 ===== -->
       <div class="mobile-body">
-        <!-- Tab 1：联系人（移动端由 JS 将 #sideBar 移入此处） -->
+        <!-- Tab 1：联系人（JS 将 #sideBar 移入此处） -->
         <section class="tab-page on" id="tab-peers"></section>
 
         <!-- Tab 2：消息（最近会话） -->
@@ -85,9 +83,17 @@
           </ul>
         </section>
 
-        <!-- Tab 3：我的 -->
+        <!-- Tab 3：传输 -->
+        <section class="tab-page" id="tab-transfers">
+          <div class="list-head"><span>传输管理</span></div>
+          <div class="transfers-body" id="mTransfersBody">
+            <div class="tr-empty">暂无传输记录</div>
+          </div>
+        </section>
+
+        <!-- Tab 4：我的 -->
         <section class="tab-page" id="tab-me">
-          <div style="overflow-y: auto; flex: 1; padding: 16px">
+          <div class="me-scroll">
             <div class="field">
               <label>昵称</label>
               <div class="f-row">
@@ -118,24 +124,16 @@
             <button class="btn block" id="meSaveAll" style="width: 100%; margin-top: 8px">保存全部设置</button>
           </div>
         </section>
-
-        <!-- Tab 4：传输 -->
-        <section class="tab-page" id="tab-transfers">
-          <div class="list-head"><span>传输管理</span></div>
-          <div class="transfers-body" id="mTransfersBody">
-            <div class="tr-empty">暂无传输记录</div>
-          </div>
-        </section>
       </div>
 
-      <!-- 底部 Tab 栏 -->
+      <!-- ===== 底部 Tab 栏（移动端） ===== -->
       <nav class="tabbar">
         <button class="tb-item on" data-tab="tab-peers">
           <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           联系人
         </button>
         <button class="tb-item" data-tab="tab-sessions">
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1-2 2h14a2 2 0 0 1 2 2z"/></svg>
           消息
           <span class="tb-badge" id="tabBadge" hidden>0</span>
         </button>
@@ -149,12 +147,13 @@
         </button>
       </nav>
 
-      <!-- ============ 桌面端主区 ============ -->
+      <!-- ===== 桌面端主区（欢迎页 / 聊天视图切换） ===== -->
       <main class="main" id="deskMain">
+        <!-- 欢迎页（未选中联系人） -->
         <div class="welcome" id="welcome">
           <div class="big-mark">飞</div>
           <h2>鸿升飞书</h2>
-          <p>双击左侧联系人打开聊天窗口，或把文件拖到联系人上直接发送。</p>
+          <p>点击左侧联系人开始对话，或把文件拖到联系人上直接发送。</p>
           <div class="tips">
             <span class="tip">同一 Wi-Fi 自动发现</span>
             <span class="tip">口令加密通信</span>
@@ -162,13 +161,97 @@
           </div>
           <p class="copyright">版权所有 © 鸿升周老师</p>
         </div>
-
+        <!-- 聊天视图挂载点 -->
+        <div class="chat-holder" id="chatHolder" hidden></div>
+        <!-- 底部状态栏 -->
         <div class="statusbar">
           <span>本机 <span class="st-strong" id="stIp">—</span></span>
           <span>在线 <span class="st-strong" id="stOnline">0</span> 人</span>
-          <span class="right" id="stVer">v1.1.0</span>
+          <span class="right" id="stVer">v1.2.0</span>
         </div>
       </main>
+    </div>
+
+    <!-- ===== 设置模态（桌面端，替代独立窗口） ===== -->
+    <div class="modal-mask" id="settingsModal" hidden>
+      <div class="modal settings-modal">
+        <div class="m-head">
+          <span class="brand-mark sm">飞</span>
+          设置
+          <button class="m-x" id="settingsClose" title="关闭">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="m-body">
+          <div class="field">
+            <label>昵称（对方看到的名字）</label>
+            <input type="text" id="stNick" maxlength="24" placeholder="鸿升周老师" />
+          </div>
+          <div class="field">
+            <label>组名（同一组名的用户可互相发现）</label>
+            <input type="text" id="stGroup" maxlength="24" placeholder="鸿升组" />
+          </div>
+          <div class="field">
+            <label>在线状态</label>
+            <div class="status-picker">
+              <div class="sp-item on" data-status="online"><span class="sp-dot" style="background:var(--green)"></span>在线</div>
+              <div class="sp-item" data-status="away"><span class="sp-dot" style="background:var(--orange)"></span>离开</div>
+              <div class="sp-item" data-status="invisible"><span class="sp-dot" style="background:#b6c0cf"></span>隐身</div>
+            </div>
+            <div class="hint">隐身时不会响应他人的发现请求，但仍可接收消息与文件。</div>
+          </div>
+          <div class="field">
+            <label>收件目录（接收文件的保存位置）</label>
+            <div class="f-row">
+              <input type="text" id="stInbox" placeholder="默认：应用数据目录 / inbox" readonly />
+              <button class="btn" id="stInboxPick" style="flex: none">选择…</button>
+            </div>
+            <div class="hint">留空则使用默认目录。文件夹接收时会自动打包为 zip。</div>
+          </div>
+          <div class="switch-row">
+            <div><div class="sr-label">消息提示音</div><div class="sr-sub">收到消息与文件时播放提示音</div></div>
+            <label class="switch"><input type="checkbox" id="stSound" /><span class="sl"></span></label>
+          </div>
+          <div class="switch-row">
+            <div><div class="sr-label">自动接收文件</div><div class="sr-sub">无需逐一确认，直接存入收件箱</div></div>
+            <label class="switch"><input type="checkbox" id="stAutoAccept" /><span class="sl"></span></label>
+          </div>
+          <div class="switch-row">
+            <div><div class="sr-label">开机自启动</div><div class="sr-sub">登录系统后自动运行鸿升飞书</div></div>
+            <label class="switch"><input type="checkbox" id="stAutoStart" /><span class="sl"></span></label>
+          </div>
+          <div class="field" style="margin-top: 18px">
+            <label>联系人备注</label>
+            <div id="stAliasList" class="alias-list"></div>
+          </div>
+        </div>
+        <div class="m-foot">
+          <button class="btn" id="stCancel">取消</button>
+          <button class="btn primary" id="stSave">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== 传输管理模态（桌面端，替代独立窗口） ===== -->
+    <div class="modal-mask" id="transfersModal" hidden>
+      <div class="modal transfers-modal">
+        <div class="m-head">
+          <span class="brand-mark sm">传</span>
+          传输管理
+          <button class="m-x" id="transfersClose" title="关闭">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="m-body">
+          <div class="transfers-body" id="dTransfersBody">
+            <div class="tr-empty">暂无传输记录</div>
+          </div>
+        </div>
+        <div class="m-foot">
+          <button class="btn" id="transfersClear">清空显示</button>
+          <button class="btn primary" id="transfersOk">关闭</button>
+        </div>
+      </div>
     </div>
 
     <!-- 移动端聊天覆盖层 -->

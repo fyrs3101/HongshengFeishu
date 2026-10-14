@@ -1,10 +1,21 @@
 // 鸿升飞书 · 前端共享工具（依赖 Tauri 全局 API withGlobalTauri）
 window.HSF = (() => {
-  const T = window.__TAURI__;
-  const invoke = (cmd, args) => T.core.invoke(cmd, args);
-  const listen = (ev, cb) => T.event.listen(ev, cb);
+  const T = window.__TAURI__ || null;
+  // 防御：Tauri 运行时未注入时给出明确错误，避免 TypeError 静默崩溃
+  const hasCore = !!(T && T.core && typeof T.core.invoke === "function");
+  const hasEvent = !!(T && T.event && typeof T.event.listen === "function");
+  const invoke = hasCore
+    ? (cmd, args) => T.core.invoke(cmd, args)
+    : async () => {
+        throw new Error("Tauri 运行时不可用（window.__TAURI__ 未注入）");
+      };
+  const listen = hasEvent
+    ? (ev, cb) => T.event.listen(ev, cb)
+    : async () => () => {};
   // 统一退订：返回 Promise<UnlistenFn>
-  const unlisten = (ev, cb) => T.event.unlisten(ev, cb).catch(() => {});
+  const unlisten = hasEvent
+    ? (ev, cb) => T.event.unlisten(ev, cb).catch(() => {})
+    : async () => {};
   const IS_MOBILE =
     /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 760;
 
@@ -208,6 +219,24 @@ window.HSF = (() => {
   }
 
   // ---- 杂项 ----
+  // Tauri 运行时缺失时的安全代理（避免 HSF.T.xxx 崩溃）
+  const safeT =
+    T ||
+    ({
+      dialog: {
+        open: async () => {
+          throw new Error("Tauri 运行时不可用");
+        },
+      },
+      window: {
+        getCurrent: () => ({
+          isMaximized: async () => false,
+          maximize: async () => {},
+          unmaximize: async () => {},
+        }),
+      },
+    });
+
   function avatarColor(name) {
     const colors = [
       ["#5b8def", "#3b6fd4"],
@@ -305,7 +334,7 @@ window.HSF = (() => {
   };
 
   return {
-    T,
+    T: safeT,
     invoke,
     listen,
     unlisten,

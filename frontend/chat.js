@@ -1,4 +1,4 @@
-/* 鸿升飞书 · 聊天组件（桌面独立窗口 / 移动端覆盖层共用）
+/* 鸿升飞书 · 聊天组件（桌面嵌入主区 / 移动端覆盖层共用）
  * 用法：HSFChat.createChat(mountEl, uid, { embedded, onClose })
  */
 (function () {
@@ -45,6 +45,7 @@
     let peer = null;
     let settings = null;
     let selfNick = "我";
+    let selfUid = "";
     let messages = [];
     let encPass = null; // 口令（内存保留，切换锁图标状态）
     const unsubs = [];
@@ -54,7 +55,7 @@
       <header class="chat-head">
         ${
           embedded
-            ? `<button class="c-btns" id="cBack" style="border:none;background:none;color:var(--text);width:30px;height:34px;cursor:pointer;display:flex;align-items:center">${ICON.back}</button>`
+            ? `<button class="c-btns" id="cBack" title="返回">${ICON.back}</button>`
             : ""
         }
         <div class="avatar sm" id="cAvatar">?</div>
@@ -63,29 +64,22 @@
           <div class="peer-sub" id="cSub">—</div>
         </div>
         <div class="head-actions">
-          ${
-            embedded
-              ? ""
-              : `<button id="cMin" title="最小化">${ICON.min}</button>`
-          }
           <button id="cLock" title="口令加密">${ICON.unlock}</button>
-          ${
-            embedded
-              ? `<button id="cCloseOv" title="关闭">${ICON.close}</button>`
-              : `<button id="cClose" title="关闭">${ICON.close}</button>`
-          }
         </div>
       </header>
       <div class="messages" id="cMessages"></div>
       <div class="composer">
-        <div class="c-btns">
-          <button id="cAttach" title="发送文件 / 文件夹">${ICON.clip}</button>
-          <button id="cLockBtn" title="口令加密">${ICON.unlock}</button>
+        <div class="composer-tools">
+          <button class="ct" id="cAttach" title="发送文件 / 文件夹">${ICON.clip}</button>
+          <button class="ct" id="cLockBtn" title="口令加密">${ICON.unlock}</button>
+          <span class="ct-hint">Enter 发送 · Shift+Enter 换行</span>
         </div>
-        <textarea id="cInput" rows="1" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
-        <button class="send-btn" id="cSend">${ICON.send}<span>发送</span></button>
+        <div class="composer-main">
+          <textarea id="cInput" rows="1" placeholder="输入消息…"></textarea>
+          <button class="send-btn" id="cSend">${ICON.send}<span>发送</span></button>
+        </div>
       </div>
-      <div class="drop-mask" id="cDrop"><div class="dm-inner">松开以发送文件 / 文件夹</div></div>
+      <div class="drop-mask" id="cDrop">松开以发送文件 / 文件夹</div>
       <input type="file" id="cFile" multiple hidden />
     `;
 
@@ -124,22 +118,19 @@
     /* ---- 消息渲染 ---- */
     function msgNode(m) {
       const row = el("div", "msg-row " + m.direction);
-      const av = el("div", "avatar sm", esc(senderName(m).charAt(0)));
-      av.style.background = HSF.avatarBg(uid);
+      const av = el("div", "avatar", esc(senderName(m).charAt(0)));
+      av.style.background = HSF.avatarBg(m.direction === "in" ? uid : selfUid);
       row.appendChild(av);
 
-      const bubble = el("div", "msg-bubble");
+      const col = el("div", "msg-col");
       if (m.kind === "file") {
-        bubble.appendChild(fileCard(m));
+        col.appendChild(fileCard(m));
       } else {
-        const t = el("div", "bubble-text");
+        const bubble = el("div", "bubble" + (m.enc ? " enc" : ""));
         // 仅接收到的密文需要本地解密；自己发出的密文消息本地保存的即为明文
         if (m.enc && m.direction === "in") {
-          const c = el("div", "cipher", esc(m.text));
-          t.appendChild(c);
-          const dec = el("button", "", `${ICON.key} 解密`);
-          dec.style.cssText =
-            "border:none;background:rgba(0,0,0,.08);border-radius:6px;padding:2px 8px;font-size:11px;margin-top:6px;cursor:pointer;color:inherit";
+          bubble.textContent = m.text;
+          const dec = el("button", "decrypt-btn", `${ICON.key} 解密`);
           dec.onclick = async () => {
             if (!encPass) {
               encPass = await HSF.promptModal({
@@ -151,29 +142,30 @@
             }
             const plain = await HSF.invoke("decrypt_text", { cipherB64: m.text, pass: encPass });
             if (plain) {
-              c.textContent = plain;
+              bubble.classList.remove("enc");
+              bubble.textContent = plain;
               dec.remove();
             } else {
               HSF.toast("口令错误，无法解密");
             }
           };
-          t.appendChild(dec);
+          col.appendChild(bubble);
+          col.appendChild(dec);
         } else {
-          t.textContent = m.text;
+          bubble.textContent = m.text;
+          col.appendChild(bubble);
         }
-        bubble.appendChild(t);
       }
       const meta = el("div", "msg-meta");
       meta.innerHTML = `<span>${HSF.fmtTime(m.ts)}</span>`;
       if (m.enc && m.kind === "text") {
-        meta.appendChild(el("span", "enc-flag", `${ICON.lock} 加密`));
+        meta.appendChild(el("span", "", `${ICON.lock} 加密`));
       }
       if (m.direction === "out") {
-        const st = el("span", "st " + m.status, esc(STATUS_TEXT[m.status] || m.status || ""));
-        meta.appendChild(st);
+        meta.appendChild(el("span", "st", esc(STATUS_TEXT[m.status] || m.status || "")));
       }
-      bubble.appendChild(meta);
-      row.appendChild(bubble);
+      col.appendChild(meta);
+      row.appendChild(col);
       return row;
     }
 
@@ -185,18 +177,26 @@
     function fileCard(m) {
       const card = el("div", "file-card");
       card.dataset.transfer = m.transfer_id;
-      const icon = el("div", "fi", m.is_dir ? "📁" : HSF.fileIcon(m.file_name || "")[0]);
-      card.appendChild(icon);
-      const mid = el("div", "fm");
-      mid.innerHTML = `
-        <div class="fname">${esc(m.file_name || "未命名文件")}${m.is_dir ? "（文件夹）" : ""}</div>
-        <div class="fsize">${HSF.fmtSize(m.file_size)}</div>
-        <div class="progress"><i style="width:${m.progress || 0}%"></i></div>
-        <div class="progress-line"><span class="pstate">${esc(STATUS_TEXT[m.status] || m.status || "")}</span><span class="pspeed"></span></div>
+      const main = el("div", "fc-main");
+      main.appendChild(
+        el("div", "fc-icon", m.is_dir ? "📁" : HSF.fileIcon(m.file_name || "")[0])
+      );
+      const info = el("div", "fc-info");
+      info.style.minWidth = "0";
+      info.style.flex = "1";
+      info.innerHTML = `
+        <div class="fc-name">${esc(m.file_name || "未命名文件")}${m.is_dir ? "（文件夹）" : ""}</div>
+        <div class="fc-size">${HSF.fmtSize(m.file_size)}</div>
       `;
-      card.appendChild(mid);
-      const ops = el("div", "fops");
-      card.appendChild(ops);
+      main.appendChild(info);
+      card.appendChild(main);
+      card.appendChild(el("div", "fc-progress"));
+      card.querySelector(".fc-progress").appendChild(el("i"));
+      const sub = el("div", "fc-sub");
+      sub.appendChild(el("span", "pstate", esc(STATUS_TEXT[m.status] || m.status || "")));
+      sub.appendChild(el("span", "pspeed"));
+      card.appendChild(sub);
+      card.appendChild(el("div", "fc-actions"));
       updateFileCard(card, m);
       return card;
     }
@@ -204,24 +204,22 @@
     function updateFileCard(card, m) {
       const state = card.querySelector(".pstate");
       const speed = card.querySelector(".pspeed");
-      const bar = card.querySelector(".progress > i");
-      const ops = card.querySelector(".fops");
+      const bar = card.querySelector(".fc-progress > i");
+      const ops = card.querySelector(".fc-actions");
       state.textContent = STATUS_TEXT[m.status] || m.status || "";
       bar.style.width = (m.progress || 0) + "%";
       if (m.status === "sending" || m.status === "receiving") {
         speed.textContent = m.speed_bps
-          ? `${HSF.fmtSpeed(m.speed_bps)}${m.eta_secs ? " · 剩余 " + HSF.fmtEta(m.eta_secs) : ""}`
+          ? `${HSF.fmtSpeed(m.speed_bps)}${m.eta_secs ? " · " + HSF.fmtEta(m.eta_secs) : ""}`
           : "";
       } else {
         speed.textContent = "";
       }
       ops.innerHTML = "";
       if (m.status === "received") {
-        const open = el("button", "acc", `${ICON.ext} 打开`);
-        open.title = "用默认程序打开";
+        const open = el("button", "", `${ICON.ext} 打开`);
         open.onclick = () => HSF.invoke("open_path", { path: m.saved_path || "", reveal: false }).catch((e) => HSF.toast(e));
         const folder = el("button", "", `${ICON.folder} 文件夹`);
-        folder.title = "在文件管理器中显示";
         folder.onclick = () => HSF.invoke("open_path", { path: m.saved_path || "", reveal: true }).catch((e) => HSF.toast(e));
         ops.appendChild(open);
         ops.appendChild(folder);
@@ -343,21 +341,12 @@
     $("cLock").onclick = toggleLock;
     $("cLockBtn").onclick = toggleLock;
 
-    if (!embedded) {
-      $("cMin").onclick = () => HSF.invoke("win_minimize").catch(() => {});
-      $("cClose").onclick = () => HSF.invoke("win_close").catch(() => {});
-      HSF.invoke("register_chat_window", { uid }).catch(() => {});
-    } else {
+    if (embedded) {
       $("cBack").onclick = close;
-      $("cCloseOv").onclick = close;
     }
 
     function close() {
       unsubs.forEach((f) => f());
-      if (!embedded) {
-        HSF.invoke("unregister_chat_window", { uid }).catch(() => {});
-        HSF.invoke("win_close").catch(() => {});
-      }
       mount.classList.remove("chat");
       mount.innerHTML = "";
       if (opts.onClose) opts.onClose();
@@ -433,7 +422,7 @@
     }
 
     /* ---- 拖拽发送（桌面） ---- */
-    if (!embedded && !HSF.IS_MOBILE) {
+    if (!HSF.IS_MOBILE) {
       let dragDepth = 0;
       mount.addEventListener("dragenter", (e) => {
         e.preventDefault();
@@ -487,6 +476,7 @@
     HSF.invoke("get_self")
       .then((s) => {
         selfNick = (s && s.nick) || "我";
+        selfUid = (s && s.uid) || "";
       })
       .catch(() => {});
     HSF.invoke("get_settings")

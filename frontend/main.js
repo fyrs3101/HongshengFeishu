@@ -1,4 +1,7 @@
-/* 鸿升飞书 · 主窗口逻辑（桌面主界面 + 移动端三 Tab） */
+/* 鸿升飞书 · 主窗口逻辑（单窗口 SPA）
+ * 桌面：左侧联系人 + 右侧聊天/欢迎；设置与传输为模态对话框
+ * 移动：底部四 Tab + 全屏聊天覆盖层
+ */
 (function () {
   "use strict";
 
@@ -9,8 +12,10 @@
   let settings = null;
   let selfInfo = null;
   let unread = {}; // uid -> 未读数
-  let openChatUid = null; // 移动端当前覆盖层聊天对象
+  let openChatUid = null; // 当前聊天对象（桌面嵌入 / 移动覆盖层）
+  let chatApi = null; // 当前聊天组件 API
   let activeTab = "tab-peers";
+  let platform = "windows"; // 由 get_platform 纠正
 
   /* ---------- 启动 ---------- */
   async function boot() {
@@ -23,11 +28,16 @@
       }
     }
     bindUI();
+    try {
+      platform = await HSF.invoke("get_platform");
+    } catch (e) {
+      platform = /Mac/i.test(navigator.platform || "") ? "macos" : "windows";
+    }
+    document.body.classList.add("plat-" + platform);
     await HSF.invoke("start").catch((e) => HSF.toast("启动失败：" + e));
     await refreshSettings(); // 先取设置，其余依赖它
     await Promise.all([refreshSelf(), refreshPeers()]);
     subscribeEvents();
-    if (IS_MOBILE) renderMe();
   }
 
   /* ---------- 数据 ---------- */
@@ -104,7 +114,10 @@
     for (const p of filtered) {
       const dn = displayName(p);
       const li = document.createElement("li");
-      li.className = "peer" + (p.status === "invisible" ? " offline" : "");
+      li.className =
+        "peer" +
+        (p.status === "invisible" ? " offline" : "") +
+        (openChatUid === p.uid ? " on" : "");
       li.dataset.uid = p.uid;
       const offline = p.status === "invisible";
       li.innerHTML = `
@@ -153,7 +166,7 @@
       if (!IS_MOBILE) {
         li.addEventListener("dragover", (e) => {
           e.preventDefault();
-          li.style.background = "#e8f0fc";
+          li.style.background = "var(--blue-soft)";
         });
         li.addEventListener("dragleave", () => (li.style.background = ""));
         li.addEventListener("drop", async (e) => {
@@ -223,33 +236,44 @@
     }
   }
 
-  /* ---------- 打开聊天 ---------- */
-  async function openChat(uid) {
+  /* ---------- 打开聊天（桌面嵌入主区 / 移动全屏覆盖层） ---------- */
+  function openChat(uid) {
+    unread[uid] = 0;
+    updateCounts();
+    renderPeers();
     if (IS_MOBILE) {
       const ov = $("chatOverlay");
       if (openChatUid === uid && ov.classList.contains("on")) return;
-      if (openChatUid) {
-        // 关闭上一个
-        ov.innerHTML = "";
-      }
+      if (openChatUid) ov.innerHTML = "";
       openChatUid = uid;
       ov.classList.add("on");
-      window.HSFChat.createChat(ov, uid, {
+      chatApi = window.HSFChat.createChat(ov, uid, {
         embedded: true,
         onClose: () => {
           ov.classList.remove("on");
           ov.innerHTML = "";
           openChatUid = null;
+          chatApi = null;
         },
       });
-      unread[uid] = 0;
-      updateCounts();
-      renderPeers();
     } else {
-      unread[uid] = 0;
-      updateCounts();
-      renderPeers();
-      HSF.invoke("open_chat_window", { uid }).catch((e) => HSF.toast("打开聊天失败：" + e));
+      if (openChatUid === uid) return;
+      openChatUid = uid;
+      $("welcome").hidden = true;
+      const holder = $("chatHolder");
+      holder.hidden = false;
+      holder.innerHTML = "";
+      chatApi = window.HSFChat.createChat(holder, uid, {
+        embedded: true,
+        onClose: () => {
+          openChatUid = null;
+          chatApi = null;
+          holder.innerHTML = "";
+          holder.hidden = true;
+          $("welcome").hidden = false;
+          renderPeers();
+        },
+      });
     }
   }
 
@@ -296,14 +320,10 @@
       const m = ev.payload;
       if (!m || m.direction !== "in") return;
       const uid = m.peer_uid;
-      // 移动端：若该会话的聊天覆盖层正开着，由组件自己处理
-      if (IS_MOBILE && openChatUid === uid) return;
-      if (!IS_MOBILE) {
-        // 桌面端：独立聊天窗口已开则不累计未读
-        try {
-          const open = await HSF.invoke("chat_window_open", { uid });
-          if (open) return;
-        } catch (e) {}
+      // 当前聊天对象正开着：由聊天组件自己处理，不累计未读
+      if (openChatUid === uid) {
+        if (activeTab === "tab-transfers") renderMobileTransfers();
+        return;
       }
       unread[uid] = (unread[uid] || 0) + 1;
       HSF.playSound(m.kind === "file" ? "file" : "msg");
@@ -311,20 +331,14 @@
       renderPeers();
       renderSessions();
       if (activeTab === "tab-transfers") renderMobileTransfers();
+      refreshTransfersModal();
     });
 
-    // 文件接收确认（主窗口处理：移动端或桌面无独立聊天窗时）
+    // 文件接收确认（单窗口：统一由主窗口处理）
     HSF.listen("file-offer", (ev) => {
       const o = ev.payload || {};
       if (!o.transfer_id) return;
-      if (!IS_MOBILE) {
-        HSF.invoke("chat_window_open", { uid: o.from }).then((open) => {
-          if (open) return; // 聊天窗自己会弹
-          handleOffer(o);
-        });
-      } else {
-        handleOffer(o);
-      }
+      handleOffer(o);
     });
 
     HSF.listen("settings-changed", () => {
@@ -350,85 +364,104 @@
     }).catch((e) => HSF.toast("操作失败：" + e));
   }
 
-  /* ---------- UI 绑定 ---------- */
-  function bindUI() {
-    // 交通灯
-    const tlClose = $("tlClose");
-    const tlMin = $("tlMin");
-    const tlMax = $("tlMax");
-    if (tlClose)
-      tlClose.onclick = () => HSF.invoke("win_close").catch(() => {});
-    if (tlMin) tlMin.onclick = () => HSF.invoke("win_minimize").catch(() => {});
-    if (tlMax)
-      tlMax.onclick = async () => {
-        try {
-          const w = HSF.T.window.getCurrent();
-          const max = await w.isMaximized();
-          if (max) await w.unmaximize();
-          else await w.maximize();
-        } catch (e) {}
-      };
+  /* ---------- 设置模态 ---------- */
+  let stBase = null;
+  let stStatus = "online";
 
-    $("settingsBtn").onclick = () => HSF.invoke("open_aux_window", { kind: "settings" });
-    $("transfersBtn").onclick = () => HSF.invoke("open_aux_window", { kind: "transfers" });
-    $("groupSendBtn").onclick = groupSend;
-    $("refreshBtn").onclick = () => {
-      HSF.invoke("refresh_peers").then(refreshPeers);
-    };
-    const rb2 = $("refreshBtn2");
-    if (rb2)
-      rb2.onclick = () => {
-        HSF.invoke("refresh_peers").then(refreshPeers);
-      };
-    $("searchInput").addEventListener("input", renderPeers);
-
-    // 移动端
-    const mRefresh = $("mRefresh");
-    if (mRefresh)
-      mRefresh.onclick = () => HSF.invoke("refresh_peers").then(refreshPeers);
-    const mTransfers = $("mTransfers");
-    if (mTransfers)
-      mTransfers.onclick = () => {
-        activeTab = "tab-transfers";
-        switchTab("tab-transfers");
-      };
-
-    document.querySelectorAll(".tabbar .tb-item").forEach((btn) => {
-      btn.onclick = () => switchTab(btn.dataset.tab);
+  function openSettings() {
+    stBase = settings;
+    stStatus = (settings && settings.status) || "online";
+    $("stNick").value = (settings && settings.nick) || "";
+    $("stGroup").value = (settings && settings.group) || "";
+    $("stSound").checked = !!(settings && settings.sound);
+    $("stAutoAccept").checked = !!(settings && settings.auto_accept);
+    $("stAutoStart").checked = !!(settings && settings.auto_start);
+    $("stInbox").value = (settings && settings.inbox_dir) || "";
+    document.querySelectorAll("#settingsModal .sp-item").forEach((x) => {
+      x.classList.toggle("on", x.dataset.status === stStatus);
     });
-
-    // 移动端"我的"页
-    const meSave = $("meSaveAll");
-    if (meSave) meSave.onclick = saveMeSettings;
-    const meNickSave = $("meNickSave");
-    if (meNickSave) meNickSave.onclick = saveMeSettings;
+    renderStAliases();
+    $("settingsModal").hidden = false;
   }
 
-  function switchTab(tab) {
-    activeTab = tab;
-    document.querySelectorAll(".tabbar .tb-item").forEach((b) => {
-      b.classList.toggle("on", b.dataset.tab === tab);
-    });
-    document.querySelectorAll(".tab-page").forEach((p) => {
-      p.classList.toggle("on", p.id === tab);
-    });
-    if (tab === "tab-sessions") renderSessions();
-    if (tab === "tab-me") refreshSelf();
-    if (tab === "tab-transfers") renderMobileTransfers();
-  }
-
-  async function renderMobileTransfers() {
-    const box = $("mTransfersBody");
-    if (!box) return;
-    let list = [];
+  async function renderStAliases() {
+    const box = $("stAliasList");
+    box.innerHTML = "";
+    let pl = [];
     try {
-      list = await HSF.invoke("list_transfers");
+      pl = await HSF.invoke("list_peers");
     } catch (e) {}
+    const aliases = (stBase && stBase.aliases) || {};
+    const uids = new Set([...pl.map((p) => p.uid), ...Object.keys(aliases)]);
+    if (!uids.size) {
+      box.innerHTML = '<div class="hint">暂无可备注的联系人</div>';
+      return;
+    }
+    for (const uid of uids) {
+      const p = pl.find((x) => x.uid === uid);
+      const row = document.createElement("div");
+      row.className = "f-row";
+      const label = p ? p.nick || p.host || "未知" : uid.slice(0, 12);
+      row.innerHTML = `
+        <input type="text" value="${HSF.escapeHtml(label)}" disabled style="flex:1;opacity:.65" />
+        <input type="text" class="st-alias-input" data-uid="${HSF.escapeHtml(uid)}"
+          value="${HSF.escapeHtml(aliases[uid] || "")}" placeholder="备注名" style="flex:1" />
+      `;
+      box.appendChild(row);
+    }
+  }
+
+  async function saveSettings() {
+    const next = {
+      ...(stBase || {}),
+      nick: ($("stNick").value || "").trim() || "鸿升周老师",
+      group: ($("stGroup").value || "").trim() || "鸿升组",
+      status: stStatus,
+      sound: $("stSound").checked,
+      auto_accept: $("stAutoAccept").checked,
+      auto_start: $("stAutoStart").checked,
+      inbox_dir: ($("stInbox").value || "").trim() || null,
+    };
+    try {
+      await HSF.invoke("save_settings", { settings: next });
+      const inputs = document.querySelectorAll(".st-alias-input");
+      for (const inp of inputs) {
+        const v = inp.value.trim();
+        const old = ((stBase && stBase.aliases) || {})[inp.dataset.uid] || "";
+        if (v !== old) {
+          await HSF.invoke("set_alias", { uid: inp.dataset.uid, alias: v });
+        }
+      }
+      $("settingsModal").hidden = true;
+      HSF.toast("设置已保存");
+    } catch (e) {
+      HSF.toast("保存失败：" + e);
+    }
+  }
+
+  /* ---------- 传输管理模态 ---------- */
+  function openTransfers() {
+    renderTransfersModal();
+    $("transfersModal").hidden = false;
+  }
+
+  function refreshTransfersModal() {
+    if (!$("transfersModal").hidden) renderTransfersModal();
+  }
+
+  function renderTransfersModal() {
+    const box = $("dTransfersBody");
+    HSF.invoke("list_transfers").then((list) => {
+      renderTransferList(box, list);
+    });
+  }
+
+  function renderTransferList(box, list) {
+    box.innerHTML = "";
     if (!list.length) {
       box.innerHTML = '<div class="tr-empty">暂无传输记录</div>';
       return;
     }
-    box.innerHTML = "";
     for (const m of list) {
       const p = peers.find((x) => x.uid === m.peer_uid);
       const dn = p ? displayName(p).name : m.direction === "out" ? "发送" : "接收";
@@ -471,6 +504,114 @@
     }
   }
 
+  /* ---------- UI 绑定 ---------- */
+  function bindUI() {
+    // 交通灯（Windows/Linux 显示；macOS 用系统原生，CSS 隐藏）
+    const tlClose = $("tlClose");
+    const tlMin = $("tlMin");
+    const tlMax = $("tlMax");
+    if (tlClose) tlClose.onclick = () => HSF.invoke("win_close").catch(() => {});
+    if (tlMin) tlMin.onclick = () => HSF.invoke("win_minimize").catch(() => {});
+    if (tlMax)
+      tlMax.onclick = async () => {
+        try {
+          const w = HSF.T.window.getCurrent();
+          const max = await w.isMaximized();
+          if (max) await w.unmaximize();
+          else await w.maximize();
+        } catch (e) {}
+      };
+
+    $("settingsBtn").onclick = openSettings;
+    $("transfersBtn").onclick = openTransfers;
+    $("groupSendBtn").onclick = groupSend;
+    $("refreshBtn").onclick = () => {
+      HSF.invoke("refresh_peers").then(refreshPeers);
+    };
+    const rb2 = $("refreshBtn2");
+    if (rb2)
+      rb2.onclick = () => {
+        HSF.invoke("refresh_peers").then(refreshPeers);
+      };
+    $("searchInput").addEventListener("input", renderPeers);
+
+    // 设置模态
+    $("settingsClose").onclick = () => ($("settingsModal").hidden = true);
+    $("stCancel").onclick = () => ($("settingsModal").hidden = true);
+    $("stSave").onclick = saveSettings;
+    $("settingsModal").addEventListener("mousedown", (e) => {
+      if (e.target === $("settingsModal")) $("settingsModal").hidden = true;
+    });
+    document.querySelectorAll("#settingsModal .sp-item").forEach((it) => {
+      it.onclick = () => {
+        document.querySelectorAll("#settingsModal .sp-item").forEach((x) => x.classList.remove("on"));
+        it.classList.add("on");
+        stStatus = it.dataset.status;
+      };
+    });
+    $("stInboxPick").onclick = async () => {
+      try {
+        const { open } = HSF.T.dialog;
+        const dir = await open({ directory: true });
+        if (dir) $("stInbox").value = dir;
+      } catch (e) {
+        HSF.toast("无法打开目录选择器");
+      }
+    };
+
+    // 传输模态
+    $("transfersClose").onclick = () => ($("transfersModal").hidden = true);
+    $("transfersOk").onclick = () => ($("transfersModal").hidden = true);
+    $("transfersClear").onclick = () => {
+      $("dTransfersBody").innerHTML = '<div class="tr-empty">暂无传输记录</div>';
+    };
+    $("transfersModal").addEventListener("mousedown", (e) => {
+      if (e.target === $("transfersModal")) $("transfersModal").hidden = true;
+    });
+
+    // 移动端
+    const mRefresh = $("mRefresh");
+    if (mRefresh)
+      mRefresh.onclick = () => HSF.invoke("refresh_peers").then(refreshPeers);
+
+    document.querySelectorAll(".tabbar .tb-item").forEach((btn) => {
+      btn.onclick = () => switchTab(btn.dataset.tab);
+    });
+
+    // 移动端"我的"页
+    const meSave = $("meSaveAll");
+    if (meSave) meSave.onclick = saveMeSettings;
+    const meNickSave = $("meNickSave");
+    if (meNickSave) meNickSave.onclick = saveMeSettings;
+
+    // Esc 关闭模态
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        $("settingsModal").hidden = true;
+        $("transfersModal").hidden = true;
+      }
+    });
+  }
+
+  function switchTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll(".tabbar .tb-item").forEach((b) => {
+      b.classList.toggle("on", b.dataset.tab === tab);
+    });
+    document.querySelectorAll(".tab-page").forEach((p) => {
+      p.classList.toggle("on", p.id === tab);
+    });
+    if (tab === "tab-sessions") renderSessions();
+    if (tab === "tab-me") refreshSelf();
+    if (tab === "tab-transfers") renderMobileTransfers();
+  }
+
+  function renderMobileTransfers() {
+    const box = $("mTransfersBody");
+    if (!box) return;
+    HSF.invoke("list_transfers").then((list) => renderTransferList(box, list));
+  }
+
   async function saveMeSettings() {
     const next = {
       ...settings,
@@ -488,10 +629,6 @@
     } catch (e) {
       HSF.toast("保存失败：" + e);
     }
-  }
-
-  function renderMe() {
-    // 占位：refreshSelf 已填充
   }
 
   boot();

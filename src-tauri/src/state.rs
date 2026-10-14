@@ -66,7 +66,8 @@ pub struct InnerState {
     pub pending_offers: HashMap<String, PendingOffer>,
     /// 被拒绝的传输（接收方拒绝或发送方被拒），分片到达时直接丢弃
     pub rejected: HashSet<String>,
-    /// 已打开的聊天窗口 peer_uid -> window label
+    /// 已打开的聊天窗口 peer_uid -> window label（保留兼容，单窗口架构下不再使用）
+    #[allow(dead_code)]
     pub chat_windows: HashMap<String, String>,
     /// 移动端分块上传暂存：transfer_id -> 临时文件路径
     pub staging: HashMap<String, PathBuf>,
