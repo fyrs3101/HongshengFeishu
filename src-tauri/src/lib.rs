@@ -1,5 +1,6 @@
 // 鸿升飞书 · Tauri 应用入口与命令
 mod network;
+mod persist;
 mod state;
 
 use std::fs;
@@ -113,6 +114,9 @@ fn start(
         if s.self_uid.is_empty() {
             s.self_uid = gen_uid();
         }
+        // 载入历史聊天记录
+        let history = persist::load_messages(&app);
+        s.messages = history;
     }
     let inbox = {
         let s = state.0.lock().unwrap();
@@ -135,6 +139,7 @@ fn start(
     }
     discovery::start_discovery(app.clone(), state.0.clone());
     transfer::start_listener(app.clone(), state.0.clone());
+    persist::spawn_persister(app.clone(), state.0.clone());
     apply_autostart(&app, state.0.lock().unwrap().settings.auto_start);
     Ok(())
 }
@@ -146,6 +151,7 @@ fn quit_app(app: tauri::AppHandle, state: tauri::State<AppState>) {
         let mut s = state.0.lock().unwrap();
         s.running = false;
     }
+    persist::save_messages(&app, &state.0.clone());
     discovery::broadcast_bye(&state.0.clone());
     app.exit(0);
 }
@@ -158,6 +164,7 @@ fn stop(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), Stri
         s.running = false;
         s.peers.clear();
     }
+    persist::save_messages(&app, &state.0.clone());
     discovery::broadcast_bye(&state.0.clone());
     let _ = app.emit("peers", Vec::<Peer>::new());
     Ok(())

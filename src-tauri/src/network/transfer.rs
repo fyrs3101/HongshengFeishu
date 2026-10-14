@@ -543,6 +543,7 @@ fn upsert_message(state: &Arc<Mutex<InnerState>>, msg: &ChatMessage) {
     } else {
         list.push(msg.clone());
     }
+    s.messages_dirty = true;
 }
 
 fn update_progress(

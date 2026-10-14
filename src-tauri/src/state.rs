@@ -56,6 +56,8 @@ pub struct InnerState {
     pub self_port: u16,
     pub peers: HashMap<String, Peer>,
     pub messages: HashMap<String, Vec<ChatMessage>>,
+    /// 消息表有变动，持久化线程据此节流落盘
+    pub messages_dirty: bool,
     pub running: bool,
     /// 收件箱根目录（运行期确定）
     pub inbox_dir: String,
