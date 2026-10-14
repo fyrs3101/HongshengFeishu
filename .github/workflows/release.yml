@@ -38,9 +38,12 @@ jobs:
       - name: 安装 Tauri CLI
         run: npm install -g @tauri-apps/cli@2.12.2
 
-      - name: "构建安装包（Windows: NSIS 安装包 + portable 免安装单机版）"
+      - name: "构建安装包（Windows: NSIS 安装包 + 免安装单文件 exe）"
         if: runner.os == 'Windows'
-        run: tauri build --bundles nsis portable
+        # 注意：Tauri v2 的 --bundles 仅支持 msi / nsis，没有 portable 类型；
+        # 免安装单机版直接取 release 产物里的原始 exe（Tauri 应用单文件即可运行，
+        # 仅需系统自带 WebView2 运行时，Windows 10/11 默认具备）
+        run: tauri build --bundles nsis
 
       - name: "构建安装包（macOS: .app + .dmg）"
         if: runner.os == 'macOS'
@@ -72,7 +75,8 @@ jobs:
           B=src-tauri/target/release/bundle
           shopt -s nullglob
           for f in "$B"/nsis/*-setup.exe; do cp "$f" "release-artifacts/HongshengFeishu-${VER}-windows-x64-setup.exe"; done
-          for f in "$B"/portable/*.exe; do cp "$f" "release-artifacts/HongshengFeishu-${VER}-windows-x64-portable.exe"; done
+          # 免安装单机版 = tauri build 产出的原始 exe（单文件双击即用，无需安装）
+          for f in src-tauri/target/release/*.exe; do cp "$f" "release-artifacts/HongshengFeishu-${VER}-windows-x64-portable.exe"; done
           ls -la release-artifacts
 
       - name: 上传到 Release
@@ -90,7 +94,7 @@ jobs:
             | 安装包 | 适用平台 | 安装方式 |
             | --- | --- | --- |
             | `HongshengFeishu-1.2.1-macOS-arm64.dmg` | macOS（Apple Silicon：M1/M2/M3/M4 等） | 双击打开磁盘映像，将「鸿升飞书」拖入「应用程序」文件夹 |
-            | `HongshengFeishu-1.2.1-windows-x64-portable.exe` | Windows 10 / 11（64 位） | **免安装单机版（推荐）**：下载后双击直接运行，无需安装、无管理员权限要求 |
+            | `HongshengFeishu-1.2.1-windows-x64-portable.exe` | Windows 10 / 11（64 位） | **免安装单机版（推荐）**：下载后双击直接运行，无需安装、无管理员权限要求；仅需系统自带 WebView2 运行时（Windows 10/11 默认具备），可整文件拷贝到 U 盘随身携带 |
             | `HongshengFeishu-1.2.1-windows-x64-setup.exe` | Windows 10 / 11（64 位） | 传统安装版：双击运行安装程序，按提示完成安装 |
             | `HongshengFeishu-1.2.1-android.apk` | Android 8.0 及以上（arm64 / armeabi，含华为等机型） | 下载到手机后点击安装（旁加载） |
 
@@ -214,7 +218,7 @@ jobs:
             | 安装包 | 适用平台 | 安装方式 |
             | --- | --- | --- |
             | `HongshengFeishu-1.2.1-macOS-arm64.dmg` | macOS（Apple Silicon：M1/M2/M3/M4 等） | 双击打开磁盘映像，将「鸿升飞书」拖入「应用程序」文件夹 |
-            | `HongshengFeishu-1.2.1-windows-x64-portable.exe` | Windows 10 / 11（64 位） | **免安装单机版（推荐）**：下载后双击直接运行，无需安装、无管理员权限要求 |
+            | `HongshengFeishu-1.2.1-windows-x64-portable.exe` | Windows 10 / 11（64 位） | **免安装单机版（推荐）**：下载后双击直接运行，无需安装、无管理员权限要求；仅需系统自带 WebView2 运行时（Windows 10/11 默认具备），可整文件拷贝到 U 盘随身携带 |
             | `HongshengFeishu-1.2.1-windows-x64-setup.exe` | Windows 10 / 11（64 位） | 传统安装版：双击运行安装程序，按提示完成安装 |
             | `HongshengFeishu-1.2.1-android.apk` | Android 8.0 及以上（arm64 / armeabi，含华为等机型） | 下载到手机后点击安装（旁加载） |
 
