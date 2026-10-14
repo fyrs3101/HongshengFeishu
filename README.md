@@ -20,6 +20,7 @@
 - 口令加密通信（SHA-256 密钥流异或，密文仅本地可解密）
 - 群发（一键广播给所有在线联系人）
 - 未读计数、消息提示音、系统通知（无窗口聚焦时）
+- 聊天记录本地持久化（messages.json，原子写入，重启不丢失，每会话最多保留 1000 条）
 
 **文件**
 
@@ -81,6 +82,7 @@ HongshengFeishu-Tauri/
 │   ├── src/
 │   │   ├── lib.rs               # 命令与入口（托盘 / 窗口 / 插件）
 │   │   ├── state.rs             # 全局状态与设置
+│   │   ├── persist.rs           # 聊天记录持久化（messages.json）
 │   │   └── network/
 │   │       ├── protocol.rs      # HSFP v2 协议 + 分帧 + 口令加密
 │   │       ├── discovery.rs     # UDP 广播发现
