@@ -3,21 +3,43 @@
 局域网即时通讯与文件传输工具：自动发现网段内同事、点对点收发消息与文件，**无需服务器**。
 界面与功能对标飞鸽传书，但代码、图标、协议均为**原创重写**，版权归属**鸿升周老师**。
 
-> 这是用 **Tauri v2**（Rust 后端 + Web 前端）重写的版本，相比早期 Swift 版更易跨平台打包分发。
+> 这是用 **Tauri v2**（Rust 后端 + Web 前端）重写的版本，一套代码产出 macOS / Windows / Android 三端。
 
-## 功能
+## 功能（v1.1.0 飞鸽级）
 
-- 局域网 UDP 广播自动发现，在线/离线实时更新
-- 点对点文本聊天（TCP 直连）
-- 文件 / 文件夹传输（文件夹自动打包为 zip 分片发送，带进度）
-- 拖拽即传、接收进度条
-- 聊天记录本地存储（收件箱在应用数据目录）
+**发现与状态**
+
+- 局域网 UDP 广播自动发现，13 秒无广播判定离线
+- 组名（同组互现）、在线 / 离开 / 隐身三态（隐身不响应发现但可收消息）
+- 本机 IP / 主机名 / 操作系统标识展示，备注名（别名）管理
+
+**消息**
+
+- 点对点文本聊天（TCP 直连，JSON 分帧 + 4 字节大端长度前缀）
+- 消息回执：发送中 → 已发送 → 已送达
+- 口令加密通信（SHA-256 密钥流异或，密文仅本地可解密）
+- 群发（一键广播给所有在线联系人）
+- 未读计数、消息提示音、系统通知（无窗口聚焦时）
+
+**文件**
+
+- 文件 / 文件夹传输（文件夹自动打包 zip，分片 + 进度 + 速度 + 剩余时间）
+- 拖拽即传（拖到聊天窗或联系人上）、接收确认弹窗（可拒绝，120 秒超时按拒绝）
+- 自动接收模式、收件箱目录自定义、收到后一键打开 / 定位文件夹
+- 传输管理窗口实时查看全部传输任务
+
+**体验**
+
+- 系统托盘（关闭主窗口 = 最小化到托盘，左键还原）
+- 自定义无边框标题栏（macOS 交通灯）、独立聊天 / 设置 / 传输窗口
+- 移动端底部 Tab 布局（联系人 / 消息 / 传输 / 我的）+ 全屏聊天覆盖层
+- 设置持久化（settings.json）、开机自启动（桌面端）
 
 ## 技术栈
 
-- 后端：Rust（零第三方网络库，自研 HSFP 协议）
+- 后端：Rust（零第三方网络库，自研 HSFP v2 协议）
 - 前端：原生 HTML / CSS / JS（Tauri 全局 API 通信）
-- 打包：Tauri v2 + `tauri-action` 云构建
+- 打包：Tauri v2 + GitHub Actions 三平台云构建
 
 ## 三种方式拿到安装包
 
@@ -27,35 +49,26 @@
 cd HongshengFeishu-Tauri/src-tauri
 cargo install tauri-cli --version "^2"   # 首次需装 CLI
 cargo tauri build
-# 产物：target/release/bundle/dmg/鸿升飞书_1.0.0_aarch64.dmg
-#       target/release/bundle/macos/鸿升飞书.app
+# 产物：target/release/bundle/dmg/*.dmg 与 target/release/bundle/macos/*.app
 ```
 
 ### 2. 没有 Mac 也能出真包（GitHub Actions 云构建，推荐）
 
-`release.yml` 用官方 `tauri-action` 在 GitHub 自带的 **macOS 运行器** 上构建，自动产出原生
-`.app` 与 `.dmg`（运行器为 Apple Silicon，产物为 `aarch64`；需 Intel 版可改 `args: --target x86_64-apple-darwin`）。
+`release.yml` 用官方 `tauri-action` 在 GitHub 运行器上构建 **macOS / Windows / Android** 三平台，
+打标签即自动触发：
 
 ```bash
-# 在工程根目录（含 .github/workflows/release.yml）执行
-git add -A && git commit -m "init"
-git push -u origin main
-git tag v1.0.0 && git push --tags
-# 到 GitHub → 该仓库 → Actions → 自动跑「Build macOS」→ 完成后在 Releases 下载
-# 鸿升飞书_1.0.0_aarch64.dmg 与 鸿升飞书.app
+git tag v1.1.0 && git push origin v1.1.0
+# 到 GitHub → Releases → 下载：
+#   HongshengFeishu-1.1.0-macOS-arm64.dmg / .app.tar.gz
+#   HongshengFeishu-1.1.0-windows-x64-setup.exe
+#   HongshengFeishu-1.1.0-android.apk（华为等手机开启"旁加载"即可安装）
 ```
-
-> 也可不打标签：仓库页 → Actions → 选「Build macOS」→ Run workflow 手动触发。
-
-如需对外无提示分发，在仓库 **Settings → Secrets** 填入
-`APPLE_CERTIFICATE` / `APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY` /
-`APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID`，即可自动 **Developer ID 签名 + 公证**。
 
 ### 3. 沙箱里我能验证什么
 
-本仓库在 Linux 沙箱中可 `cargo build` 通过，证明 Rust 工程可编译、协议可运行；
-**真正的 macOS `.app`/`.dmg` 只在 macOS 或 macOS CI 上产出**（Apple 工具链限制，非 Tauri 特有）。
-无 Mac 时，方案 2 的 GitHub Actions 就是「云上 macOS」——把代码推上去，包自动生成。
+Linux 沙箱中 `cargo check` 双目标（桌面 + Android）零警告、可本地产出调试 APK；
+macOS `.app`/`.dmg` 只在 macOS 或 macOS CI 上产出（Apple 工具链限制）。
 
 ## 目录结构
 
@@ -63,16 +76,23 @@ git tag v1.0.0 && git push --tags
 HongshengFeishu-Tauri/
 ├── src-tauri/
 │   ├── Cargo.toml
-│   ├── tauri.conf.json          # 产品名/ Bundle ID / DMG 目标
+│   ├── tauri.conf.json          # 产品名 / Bundle ID / 窗口配置
 │   ├── capabilities/default.json
 │   ├── src/
-│   │   ├── lib.rs               # 命令与入口
-│   │   ├── state.rs             # 全局状态
+│   │   ├── lib.rs               # 命令与入口（托盘 / 窗口 / 插件）
+│   │   ├── state.rs             # 全局状态与设置
 │   │   └── network/
-│   │       ├── protocol.rs      # HSFP 协议 + 分帧
+│   │       ├── protocol.rs      # HSFP v2 协议 + 分帧 + 口令加密
 │   │       ├── discovery.rs     # UDP 广播发现
-│   │       └── transfer.rs      # TCP 消息/文件传输
-├── frontend/                    # 侧边栏 + 聊天区界面
+│   │       └── transfer.rs      # TCP 消息/文件传输 + 回执
+├── frontend/
+│   ├── index.html / main.js     # 主界面（桌面双栏 + 移动端四 Tab）
+│   ├── chat.html / chat.js      # 独立聊天窗（桌面窗口与移动覆盖层共用）
+│   ├── settings.html / .js      # 设置窗
+│   ├── transfers.html / .js     # 传输管理窗
+│   ├── common.js                # 共享工具（invoke/事件/弹窗/Toast/音效）
+│   ├── styles.css               # 设计系统
+│   └── assets/                  # 提示音
 ├── tools/make_icon.py           # 图标生成
 └── .github/workflows/release.yml
 ```
@@ -80,6 +100,6 @@ HongshengFeishu-Tauri/
 ## 协议端口
 
 - 发现：UDP `24680` 广播
-- 传输：TCP `24681`
+- 传输：TCP 系统分配临时端口（随广播通告，避免固定端口冲突）
 
 首次运行 macOS 会请求**本地网络权限**，请点「允许」，否则发现不了设备。
