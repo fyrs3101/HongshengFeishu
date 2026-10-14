@@ -20,7 +20,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
-tauri-plugin-dialog = "2"
+# 显式声明 gtk3 feature（当前已是默认值，显式写出以防上游默认变更）：
+# Linux 桌面使用 GTK 原生对话框，避免部分环境 xdg-desktop-portal 后端缺失导致选择器无法弹出
+tauri-plugin-dialog = { version = "2", features = ["gtk3"] }
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
