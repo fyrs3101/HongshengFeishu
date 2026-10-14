@@ -32,7 +32,7 @@
 **体验**
 
 - 系统托盘（关闭主窗口 = 最小化到托盘，左键还原）
-- 自定义无边框标题栏（macOS 交通灯）、独立聊天 / 设置 / 传输窗口
+- 自定义无边框标题栏（macOS 交通灯）、**单窗口架构**：聊天嵌入主区、设置与传输管理为模态框（彻底规避多窗口白屏/卡死）
 - 移动端底部 Tab 布局（联系人 / 消息 / 传输 / 我的）+ 全屏聊天覆盖层
 - 设置持久化（settings.json）、开机自启动（桌面端）
 
@@ -88,12 +88,10 @@ HongshengFeishu-Tauri/
 │   │       ├── discovery.rs     # UDP 广播发现
 │   │       └── transfer.rs      # TCP 消息/文件传输 + 回执
 ├── frontend/
-│   ├── index.html / main.js     # 主界面（桌面双栏 + 移动端四 Tab）
-│   ├── chat.html / chat.js      # 独立聊天窗（桌面窗口与移动覆盖层共用）
-│   ├── settings.html / .js      # 设置窗
-│   ├── transfers.html / .js     # 传输管理窗
+│   ├── index.html / main.js     # 单窗口 SPA（桌面双栏 + 移动端四 Tab）
+│   ├── chat.js                  # 聊天组件（桌面嵌入主区 / 移动端覆盖层共用）
 │   ├── common.js                # 共享工具（invoke/事件/弹窗/Toast/音效）
-│   ├── styles.css               # 设计系统
+│   ├── styles.css               # 设计系统（飞鸽传书风格）
 │   └── assets/                  # 提示音
 ├── tools/make_icon.py           # 图标生成
 └── .github/workflows/release.yml
