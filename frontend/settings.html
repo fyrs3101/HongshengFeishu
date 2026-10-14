@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>设置 · 鸿升飞书</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="settings">
+      <header class="titlebar">
+        <div class="traffic">
+          <button class="tl-close" id="tlClose" title="关闭"></button>
+          <button class="tl-min" id="tlMin" title="最小化"></button>
+        </div>
+        <div class="win-title">
+          <span class="brand-mark">飞</span>
+          设置
+        </div>
+      </header>
+
+      <div class="settings-body">
+        <div class="field">
+          <label>昵称（对方看到的名字）</label>
+          <input type="text" id="fNick" maxlength="24" placeholder="鸿升周老师" />
+        </div>
+
+        <div class="field">
+          <label>组名（同一组名的用户可互相发现）</label>
+          <input type="text" id="fGroup" maxlength="24" placeholder="鸿升组" />
+        </div>
+
+        <div class="field">
+          <label>在线状态</label>
+          <div class="status-picker">
+            <div class="sp-item on" data-status="online"><span class="sp-dot" style="background:var(--green)"></span>在线</div>
+            <div class="sp-item" data-status="away"><span class="sp-dot" style="background:var(--orange)"></span>离开</div>
+            <div class="sp-item" data-status="invisible"><span class="sp-dot" style="background:#b6c0cf"></span>隐身</div>
+          </div>
+          <div class="hint">隐身时不会响应他人的发现请求，但仍可接收消息与文件。</div>
+        </div>
+
+        <div class="field">
+          <label>收件目录（接收文件的保存位置）</label>
+          <div class="f-row">
+            <input type="text" id="fInbox" placeholder="默认：应用数据目录 / inbox" readonly />
+            <button class="btn" id="fInboxPick" style="flex: none">选择…</button>
+          </div>
+          <div class="hint">留空则使用默认目录。文件夹接收时会自动打包为 zip。</div>
+        </div>
+
+        <div class="switch-row">
+          <div><div class="sr-label">消息提示音</div><div class="sr-sub">收到消息与文件时播放提示音</div></div>
+          <label class="switch"><input type="checkbox" id="fSound" /><span class="sl"></span></label>
+        </div>
+        <div class="switch-row">
+          <div><div class="sr-label">自动接收文件</div><div class="sr-sub">无需逐一确认，直接存入收件箱</div></div>
+          <label class="switch"><input type="checkbox" id="fAutoAccept" /><span class="sl"></span></label>
+        </div>
+        <div class="switch-row">
+          <div><div class="sr-label">开机自启动</div><div class="sr-sub">登录系统后自动运行鸿升飞书</div></div>
+          <label class="switch"><input type="checkbox" id="fAutoStart" /><span class="sl"></span></label>
+        </div>
+
+        <div class="field" style="margin-top: 20px">
+          <label>联系人备注</label>
+          <div id="aliasList" style="display: flex; flex-direction: column; gap: 8px"></div>
+        </div>
+      </div>
+
+      <div class="settings-foot">
+        <button class="btn block" id="btnCancel">取消</button>
+        <button class="btn primary block" id="btnSave">保存</button>
+      </div>
+    </div>
+
+    <script src="common.js"></script>
+    <script src="settings.js"></script>
+  </body>
+</html>

@@ -80,7 +80,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: release-artifacts/*
           body: |
-            ## 鸿升飞书 v1.0.1 —— macOS / Windows / Android 三平台
+            ## 鸿升飞书 ${{ github.ref_name }} —— macOS / Windows / Android 三平台
 
             开发者：鸿升周老师 ｜ 通信协议：HSFP（同一局域网自动发现，功能对标飞鸽传书）
 
@@ -203,7 +203,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: release-apk/*.apk
           body: |
-            ## 鸿升飞书 v1.0.1 —— macOS / Windows / Android 三平台
+            ## 鸿升飞书 ${{ github.ref_name }} —— macOS / Windows / Android 三平台
 
             开发者：鸿升周老师 ｜ 通信协议：HSFP（同一局域网自动发现，功能对标飞鸽传书）
 

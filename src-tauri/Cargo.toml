@@ -1,6 +1,6 @@
 [package]
 name = "hongsheng-feishu"
-version = "1.0.1"
+version = "1.1.0"
 description = "鸿升飞书 - 局域网即时通讯与文件传输"
 authors = ["鸿升周老师"]
 edition = "2021"
@@ -19,12 +19,15 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
 zip = "0.6"
+sha2 = "0.10"
 
 [profile.release]
 opt-level = 2
