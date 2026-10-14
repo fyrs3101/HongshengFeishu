@@ -24,7 +24,8 @@
     }
     bindUI();
     await HSF.invoke("start").catch((e) => HSF.toast("启动失败：" + e));
-    await Promise.all([refreshSettings(), refreshSelf(), refreshPeers()]);
+    await refreshSettings(); // 先取设置，其余依赖它
+    await Promise.all([refreshSelf(), refreshPeers()]);
     subscribeEvents();
     if (IS_MOBILE) renderMe();
   }
