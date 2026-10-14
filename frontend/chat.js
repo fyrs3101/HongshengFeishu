@@ -358,8 +358,7 @@
       // 桌面端用系统对话框拿真实路径；移动端用文件选择器走字节上传
       if (!HSF.IS_MOBILE) {
         try {
-          const { open } = HSF.T.dialog;
-          const selected = await open({ multiple: true });
+          const selected = await HSF.invoke("plugin:dialog|open", { options: { multiple: true } });
           if (!selected) return;
           const paths = Array.isArray(selected) ? selected : [selected];
           for (const p of paths) {

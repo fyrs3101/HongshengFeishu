@@ -280,8 +280,10 @@
   /* ---------- 文件选择发送 ---------- */
   async function pickAndSend(uid, dir = false) {
     try {
-      const { open } = HSF.T.dialog;
-      const selected = dir ? await open({ directory: true }) : await open({ multiple: true });
+      // withGlobalTauri 模式下插件 API 不挂 window.__TAURI__，直接调插件命令
+      const selected = dir
+        ? await HSF.invoke("plugin:dialog|open", { options: { directory: true } })
+        : await HSF.invoke("plugin:dialog|open", { options: { multiple: true } });
       if (!selected) return;
       const paths = Array.isArray(selected) ? selected : [selected];
       for (const p of paths) {
@@ -551,8 +553,7 @@
     });
     $("stInboxPick").onclick = async () => {
       try {
-        const { open } = HSF.T.dialog;
-        const dir = await open({ directory: true });
+        const dir = await HSF.invoke("plugin:dialog|open", { options: { directory: true } });
         if (dir) $("stInbox").value = dir;
       } catch (e) {
         HSF.toast("无法打开目录选择器");

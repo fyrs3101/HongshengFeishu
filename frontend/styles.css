@@ -1539,12 +1539,49 @@ textarea {
 }
 
 /* macOS：隐藏 HTML 交通灯（系统原生交通灯已显示），留出左侧空间 */
-body.plat-mac .traffic {
+body.plat-macos .traffic {
   display: none;
 }
-body.plat-mac .win-title {
+body.plat-macos .win-title {
   margin-left: 68px;
 }
-body.plat-mac .titlebar {
+body.plat-macos .titlebar {
   padding-left: 8px;
+}
+
+/* Windows / Linux：窗口按钮按桌面习惯放右上角，顺序为 最小化→最大化→关闭，
+   颜色语义与 Windows 一致（默认浅灰，悬停加深，关闭键悬停变红） */
+body.plat-windows .traffic,
+body.plat-linux .traffic {
+  order: 10;
+  margin-right: 0;
+  margin-left: 14px;
+}
+body.plat-windows .tl-min,
+body.plat-linux .tl-min {
+  order: 1;
+}
+body.plat-windows .tl-max,
+body.plat-linux .tl-max {
+  order: 2;
+}
+body.plat-windows .tl-close,
+body.plat-linux .tl-close {
+  order: 3;
+}
+body.plat-windows .traffic button,
+body.plat-linux .traffic button {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #c9cfda;
+  transition: background 0.15s;
+}
+body.plat-windows .traffic button:hover,
+body.plat-linux .traffic button:hover {
+  background: #aab3c2;
+}
+body.plat-windows .tl-close:hover,
+body.plat-linux .tl-close:hover {
+  background: #ff5f57;
 }
