@@ -43,6 +43,7 @@
     opts = opts || {};
     const embedded = !!opts.embedded;
     let peer = null;
+    let settings = null;
     let selfNick = "我";
     let messages = [];
     let encPass = null; // 口令（内存保留，切换锁图标状态）
@@ -104,8 +105,9 @@
       const name = $("cName");
       const sub = $("cSub");
       if (peer) {
-        const dn = peer.alias || peer.nick || peer.host || "未知";
-        av.textContent = (dn || "?").trim().charAt(0);
+        const alias = settings && settings.aliases && settings.aliases[uid];
+        const dn = (alias && alias.trim()) || peer.nick || peer.host || "未知";
+        av.textContent = dn.trim().charAt(0);
         av.style.background = HSF.avatarBg(peer.uid);
         name.textContent = dn;
         sub.textContent = `${peer.host || ""} · ${peer.ip} · ${HSF.osLabel(peer.os)}`;
@@ -131,7 +133,8 @@
         bubble.appendChild(fileCard(m));
       } else {
         const t = el("div", "bubble-text");
-        if (m.enc) {
+        // 仅接收到的密文需要本地解密；自己发出的密文消息本地保存的即为明文
+        if (m.enc && m.direction === "in") {
           const c = el("div", "cipher", esc(m.text));
           t.appendChild(c);
           const dec = el("button", "", `${ICON.key} 解密`);
@@ -362,7 +365,26 @@
 
     /* ---- 文件发送 ---- */
     const fileInput = $("cFile");
-    $("cAttach").onclick = () => fileInput.click();
+    $("cAttach").onclick = async () => {
+      // 桌面端用系统对话框拿真实路径；移动端用文件选择器走字节上传
+      if (!HSF.IS_MOBILE) {
+        try {
+          const { open } = HSF.T.dialog;
+          const selected = await open({ multiple: true });
+          if (!selected) return;
+          const paths = Array.isArray(selected) ? selected : [selected];
+          for (const p of paths) {
+            HSF.invoke("send_file", { peerUid: uid, path: p }).catch((e) =>
+              HSF.toast("发送失败：" + e)
+            );
+          }
+        } catch (e) {
+          HSF.toast("无法打开文件选择器");
+        }
+        return;
+      }
+      fileInput.click();
+    };
     fileInput.onchange = async () => {
       const files = Array.from(fileInput.files || []);
       fileInput.value = "";
@@ -465,6 +487,12 @@
     HSF.invoke("get_self")
       .then((s) => {
         selfNick = (s && s.nick) || "我";
+      })
+      .catch(() => {});
+    HSF.invoke("get_settings")
+      .then((s) => {
+        settings = s;
+        refreshHead();
       })
       .catch(() => {});
     refreshHead();

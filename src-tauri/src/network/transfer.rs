@@ -67,7 +67,13 @@ fn handle_incoming(stream: &mut TcpStream, app: tauri::AppHandle, state: Arc<Mut
                 let msg = ChatMessage::text_in(&from, &display, enc);
                 upsert_message(&state, &msg);
                 let _ = app.emit("message", msg);
-                notify_incoming(&app, &state, &nick, &display);
+                // 通知不泄露密文内容
+                let notice = if enc {
+                    "[加密消息]".to_string()
+                } else {
+                    display.clone()
+                };
+                notify_incoming(&app, &state, &nick, &notice);
                 // 回执：告诉对方消息已送达
                 let peer_port = state.lock().unwrap().peers.get(&from).map(|p| (p.ip.clone(), p.port));
                 let target = match peer_port {
