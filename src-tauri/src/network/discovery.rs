@@ -1,5 +1,5 @@
 // UDP 广播发现：周期性广播自身在线，监听他人广播，过期自动下线
-use std::net::UdpSocket;
+use std::net::{SocketAddr, UdpSocket};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -8,6 +8,75 @@ use tauri::Emitter;
 
 use crate::network::protocol::*;
 use crate::state::InnerState;
+
+/// 枚举本机所有"发得出广播"的网卡（UP + 非回环 + 支持广播），
+/// 计算各自的子网定向广播地址（IP | ~掩码）。
+///
+/// 为什么需要：Android 上向 255.255.255.255（有限广播）发送经常失败
+/// （系统限制部分接口的有限广播），而华为等机型的省电策略还会过滤广播报文；
+/// 桌面多网卡场景下有限广播也只走默认路由。定向广播（如 192.168.31.255:24680）
+/// 是局域网发现的标准可靠做法（飞鸽传书帮助文档同样要求同网段互通）。
+#[cfg(unix)]
+fn subnet_broadcast_addrs() -> Vec<SocketAddr> {
+    let mut out: Vec<SocketAddr> = Vec::new();
+    unsafe {
+        let mut ifap: *mut libc::ifaddrs = std::ptr::null_mut();
+        if libc::getifaddrs(&mut ifap) != 0 || ifap.is_null() {
+            return out;
+        }
+        let mut cur = ifap;
+        while !cur.is_null() {
+            let e = &*cur;
+            let flags = e.ifa_flags as i32;
+            let up = (flags & libc::IFF_UP) != 0;
+            let no_loopback = (flags & libc::IFF_LOOPBACK) == 0;
+            let can_bcast = (flags & libc::IFF_BROADCAST) != 0;
+            let has_addr = !e.ifa_addr.is_null()
+                && (*e.ifa_addr).sa_family == libc::AF_INET as libc::sa_family_t;
+            let has_mask = !e.ifa_netmask.is_null()
+                && (*e.ifa_netmask).sa_family == libc::AF_INET as libc::sa_family_t;
+            if up && no_loopback && can_bcast && has_addr && has_mask {
+                let ip = (*(e.ifa_addr as *const libc::sockaddr_in)).sin_addr.s_addr;
+                let mask = (*(e.ifa_netmask as *const libc::sockaddr_in)).sin_addr.s_addr;
+                let bcast = ip | !mask;
+                let addr = SocketAddr::new(
+                    std::net::IpAddr::V4(std::net::Ipv4Addr::from(u32::from_be(bcast))),
+                    DISCOVERY_PORT,
+                );
+                if !out.contains(&addr) {
+                    out.push(addr);
+                }
+            }
+            cur = e.ifa_next;
+        }
+        libc::freeifaddrs(ifap);
+    }
+    out
+}
+
+#[cfg(not(unix))]
+fn subnet_broadcast_addrs() -> Vec<SocketAddr> {
+    Vec::new()
+}
+
+/// 广播目标集合：各网段定向广播 + 有限广播 255.255.255.255（桌面端有效，
+/// 安卓上失败也无妨——定向广播已覆盖）。发送时逐个尝试，全部忽略错误。
+fn announce_targets() -> Vec<SocketAddr> {
+    let mut v = subnet_broadcast_addrs();
+    if let Ok(a) = DISCOVERY_ADDR.parse::<SocketAddr>() {
+        if !v.contains(&a) {
+            v.push(a);
+        }
+    }
+    v
+}
+
+/// 向所有广播目标发送一帧通告
+fn send_to_all(socket: &UdpSocket, payload: &[u8]) {
+    for target in announce_targets() {
+        let _ = socket.send_to(payload, target);
+    }
+}
 
 /// 启动发现（广播线程 + 监听线程）
 pub fn start_discovery(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
@@ -53,7 +122,7 @@ pub fn start_discovery(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
                     app: "HongShengFeishu".to_string(),
                 };
                 if let Ok(p) = serde_json::to_vec(&announce) {
-                    let _ = socket.send_to(&p, DISCOVERY_ADDR);
+                    send_to_all(&socket, &p);
                 }
             }
             thread::sleep(Duration::from_secs(3));
@@ -211,7 +280,7 @@ pub fn broadcast_bye(state: &Arc<Mutex<InnerState>>) {
             app: "HongShengFeishu".to_string(),
         };
         if let Ok(p) = serde_json::to_vec(&bye) {
-            let _ = socket.send_to(&p, DISCOVERY_ADDR);
+            send_to_all(&socket, &p);
         }
     }
 }
@@ -247,7 +316,7 @@ pub fn refresh(state: &Arc<Mutex<InnerState>>) {
             app: "HongShengFeishu".to_string(),
         };
         if let Ok(p) = serde_json::to_vec(&announce) {
-            let _ = socket.send_to(&p, DISCOVERY_ADDR);
+            send_to_all(&socket, &p);
         }
     }
 }

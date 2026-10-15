@@ -508,6 +508,11 @@ pub fn run() {
     let app = builder
         .manage(state)
         .setup(|app| {
+            // Android：持有 WifiManager MulticastLock，防止系统省电策略过滤
+            // 局域网广播报文导致自动发现失效（失败静默降级）
+            #[cfg(target_os = "android")]
+            crate::network::mlock::acquire();
+
             // 系统托盘：左键显示主窗口，右键菜单（仅桌面端）
             #[cfg(desktop)]
             {

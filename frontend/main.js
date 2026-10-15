@@ -35,6 +35,19 @@
     }
     document.body.classList.add("plat-" + platform);
     await HSF.invoke("start").catch((e) => HSF.toast("启动失败：" + e));
+    // 移动端启动页（对标飞鸽传书）：后台发现已启动，用户点击"使用鸿升飞书"后进入主界面
+    if (IS_MOBILE) {
+      const splash = $("splash");
+      const enter = $("splashEnter");
+      if (splash && enter && !splash.classList.contains("hide")) {
+        await new Promise((resolve) => {
+          enter.onclick = () => {
+            splash.classList.add("hide");
+            resolve();
+          };
+        });
+      }
+    }
     await refreshSettings(); // 先取设置，其余依赖它
     await Promise.all([refreshSelf(), refreshPeers()]);
     subscribeEvents();
@@ -64,6 +77,18 @@
       $("meSound").checked = !!settings.sound;
       $("meAutoAccept").checked = !!settings.auto_accept;
       $("meAutoStart").checked = !!settings.auto_start;
+      // 个人信息卡（对标飞鸽传书）
+      $("meAvatar").textContent = (settings.nick || "飞").trim().charAt(0);
+      $("meNickShow").textContent = settings.nick || "未命名";
+      $("meIpShow").textContent = `${selfInfo.ip} · ${settings.group || "未分组"}`;
+      // 收件夹路径提示
+      const inboxPath = $("mInboxPath");
+      if (inboxPath)
+        inboxPath.textContent = selfInfo.inbox
+          ? selfInfo.inbox.length > 30
+            ? "…" + selfInfo.inbox.slice(-28)
+            : selfInfo.inbox
+          : "收到的文件在这里";
       $("meInfo").innerHTML =
         `本机名：${HSF.escapeHtml(selfInfo.host)}<br>` +
         `IP 地址：${HSF.escapeHtml(selfInfo.ip)}<br>` +
@@ -301,6 +326,87 @@
     }
   }
 
+  /* ---------- 移动端文件 Tab：分类选择 → 选择联系人发送（对标飞鸽） ---------- */
+  async function pickCategoryAndSend(cat) {
+    // 选择文件：优先 dialog 插件，失败回退 Rust 兜底命令
+    let selected = null;
+    try {
+      selected = await HSF.invoke("plugin:dialog|open", { options: { multiple: true } });
+    } catch (pluginErr) {
+      try {
+        selected = await HSF.invoke("pick_files");
+      } catch (e) {
+        return HSF.toast("无法打开文件选择器：" + (e && e.message ? e.message : e));
+      }
+    }
+    if (!selected) return;
+    const paths = Array.isArray(selected) ? selected : [selected];
+    if (!paths.length) return;
+    // 选择发送对象：底部弹层列出在线联系人
+    const online = peers.filter((p) => p.status !== "invisible");
+    if (!online.length) return HSF.toast("当前没有在线联系人，请确认对方已打开鸿升飞书");
+    if (online.length === 1) {
+      sendPathsTo(online[0].uid, paths);
+      return;
+    }
+    showPeerSheet(online, (uid) => sendPathsTo(uid, paths));
+  }
+
+  function sendPathsTo(uid, paths) {
+    for (const p of paths) {
+      HSF.invoke("send_file", { peerUid: uid, path: p }).catch((e) =>
+        HSF.toast("发送失败：" + e)
+      );
+    }
+    HSF.toast(`正在发送 ${paths.length} 个文件…`);
+    switchTab("tab-files");
+  }
+
+  /* 底部联系人选择弹层（对标飞鸽：选完文件后选人） */
+  function showPeerSheet(list, onPick) {
+    closePeerSheet();
+    const mask = document.createElement("div");
+    mask.className = "sheet-mask";
+    const sheet = document.createElement("div");
+    sheet.className = "sheet";
+    sheet.innerHTML = `
+      <div class="sheet-head">
+        <span>发送给</span>
+        <button class="sheet-x" aria-label="关闭">✕</button>
+      </div>
+      <div class="sheet-body"></div>`;
+    const body = sheet.querySelector(".sheet-body");
+    for (const p of list) {
+      const dn = displayName(p);
+      const row = document.createElement("button");
+      row.className = "sheet-peer";
+      row.innerHTML = `
+        <span class="avatar" style="background:${HSF.avatarBg(p.uid)}">${HSF.escapeHtml(
+        dn.name.charAt(0)
+      )}</span>
+        <span class="sp-meta">
+          <span class="sp-name">${HSF.escapeHtml(dn.name)}</span>
+          <span class="sp-sub">${HSF.escapeHtml(p.host || "")} · ${HSF.escapeHtml(p.ip)}</span>
+        </span>`;
+      row.onclick = () => {
+        closePeerSheet();
+        onPick(p.uid);
+      };
+      body.appendChild(row);
+    }
+    mask.onclick = (e) => {
+      if (e.target === mask) closePeerSheet();
+    };
+    sheet.querySelector(".sheet-x").onclick = closePeerSheet;
+    mask.appendChild(sheet);
+    document.body.appendChild(mask);
+    requestAnimationFrame(() => mask.classList.add("on"));
+  }
+
+  function closePeerSheet() {
+    document.querySelectorAll(".sheet-mask").forEach((m) => m.remove());
+  }
+
   /* ---------- 群发 ---------- */
   async function groupSend() {
     const text = await HSF.promptModal({
@@ -331,7 +437,7 @@
       const uid = m.peer_uid;
       // 当前聊天对象正开着：由聊天组件自己处理，不累计未读
       if (openChatUid === uid) {
-        if (activeTab === "tab-transfers") renderMobileTransfers();
+        if (activeTab === "tab-files") renderMobileTransfers();
         return;
       }
       unread[uid] = (unread[uid] || 0) + 1;
@@ -339,7 +445,7 @@
       updateCounts();
       renderPeers();
       renderSessions();
-      if (activeTab === "tab-transfers") renderMobileTransfers();
+      if (activeTab === "tab-files") renderMobileTransfers();
       refreshTransfersModal();
     });
 
@@ -588,6 +694,28 @@
     if (mRefresh)
       mRefresh.onclick = () => HSF.invoke("refresh_peers").then(refreshPeers);
 
+    // 移动端头部齿轮：打开设置（复用桌面设置模态）
+    const mSettings = $("mSettings");
+    if (mSettings) mSettings.onclick = openSettings;
+
+    // 收件夹：尝试用系统默认程序打开（桌面有效；安卓提示路径）
+    const mInbox = $("mInboxBtn");
+    if (mInbox)
+      mInbox.onclick = async () => {
+        const dir = (selfInfo && selfInfo.inbox) || "";
+        if (!dir) return HSF.toast("收件目录不可用");
+        try {
+          await HSF.invoke("open_path", { path: dir, reveal: true });
+        } catch (e) {
+          HSF.toast("无法打开收件夹：" + (e && e.message ? e.message : e));
+        }
+      };
+
+    // 文件 Tab：分类选择文件 → 底部弹层选择在线联系人发送
+    document.querySelectorAll(".fg-file-cat").forEach((btn) => {
+      btn.onclick = () => pickCategoryAndSend(btn.dataset.cat);
+    });
+
     document.querySelectorAll(".tabbar .tb-item").forEach((btn) => {
       btn.onclick = () => switchTab(btn.dataset.tab);
     });
@@ -617,7 +745,7 @@
     });
     if (tab === "tab-sessions") renderSessions();
     if (tab === "tab-me") refreshSelf();
-    if (tab === "tab-transfers") renderMobileTransfers();
+    if (tab === "tab-files") renderMobileTransfers();
   }
 
   function renderMobileTransfers() {
