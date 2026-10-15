@@ -23,12 +23,6 @@ tauri = { version = "2", features = ["tray-icon", "image-png"] }
 # 显式声明 gtk3 feature（当前已是默认值，显式写出以防上游默认变更）：
 # Linux 桌面使用 GTK 原生对话框，避免部分环境 xdg-desktop-portal 后端缺失导致选择器无法弹出
 tauri-plugin-dialog = { version = "2", features = ["gtk3"] }
-# 直接依赖 rfd 作为原生文件/目录选择器的兜底通道：
-# 不经 Tauri 插件 ACL（capability 若漏配 windows 字段会导致插件命令被拒），
-# macOS(NSOpenPanel)/Windows(IFileDialog)/Linux(GTK) 均为系统原生选择器。
-# 关闭 default-features：其默认的 xdg-portal 与 gtk3 后端互斥（rfd build.rs 会 panic），
-# 且 xdg-portal 在部分桌面环境下后端不完整，GTK 直连更稳。
-rfd = { version = "0.16", default-features = false, features = ["gtk3"] }
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
 serde = { version = "1", features = ["derive"] }
@@ -36,6 +30,16 @@ serde_json = "1"
 base64 = "0.22"
 zip = "0.6"
 sha2 = "0.10"
+
+# 直接依赖 rfd 作为原生文件/目录选择器的兜底通道（仅桌面端）：
+# 不经 Tauri 插件 ACL（capability 若漏配 windows 字段会导致插件命令被拒），
+# macOS(NSOpenPanel)/Windows(IFileDialog)/Linux(GTK) 均为系统原生选择器。
+# rfd 不支持 Android（插件在移动端走 JNI 实现，本就不编译 rfd），故按 target 限定；
+# 关闭 default-features：其默认的 xdg-portal 与 gtk3 后端互斥（rfd build.rs 会 panic）。
+[target.'cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))'.dependencies.rfd]
+version = "0.16"
+default-features = false
+features = ["gtk3"]
 
 [profile.release]
 opt-level = 2
