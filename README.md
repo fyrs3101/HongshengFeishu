@@ -5,7 +5,13 @@
 
 > 这是用 **Tauri v2**（Rust 后端 + Web 前端）重写的版本，一套代码产出 macOS / Windows / Android 三端。
 
-## 功能（v1.2.2 飞鸽级）
+## v1.2.3 修复记录（2026-10-15）
+
+- **macOS 关闭窗口后点 Dock 图标打不开** —— 根因：关闭 = 隐藏到托盘，托盘左键点击有 reopen 处理，但 Dock 图标点击触发的是 `RunEvent::Reopen` 事件，此前未处理。已补上该事件处理（show + unminimize + set_focus 主窗口）。
+
+（v1.2.2 修复：macOS 窗口按钮消失、目录选择器无法打开（capability windows 字段 + rfd 兜底）、Windows 按钮位置、Android 构建的 rfd 平台限定，详见 GitHub Releases 说明。）
+
+## 功能（v1.2.3 飞鸽级）
 
 **发现与状态**
 
@@ -59,12 +65,12 @@ cargo tauri build
 打标签即自动触发：
 
 ```bash
-git tag v1.2.2 && git push origin v1.2.2
+git tag v1.2.3 && git push origin v1.2.3
 # 到 GitHub → Releases → 下载：
-#   HongshengFeishu-1.2.2-macOS-arm64.dmg / .app.tar.gz
-#   HongshengFeishu-1.2.2-windows-x64-portable.exe（免安装单机版，双击即用）
-#   HongshengFeishu-1.2.2-windows-x64-setup.exe（传统安装版）
-#   HongshengFeishu-1.2.2-android.apk（华为等手机开启"旁加载"即可安装）
+#   HongshengFeishu-1.2.3-macOS-arm64.dmg / .app.tar.gz
+#   HongshengFeishu-1.2.3-windows-x64-portable.exe（免安装单机版，双击即用）
+#   HongshengFeishu-1.2.3-windows-x64-setup.exe（传统安装版）
+#   HongshengFeishu-1.2.3-android.apk（华为等手机开启"旁加载"即可安装）
 ```
 
 ### 3. 沙箱里我能验证什么

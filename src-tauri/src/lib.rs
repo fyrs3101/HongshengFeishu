@@ -505,7 +505,7 @@ pub fn run() {
             Some(vec!["--autostart"]),
         ));
     }
-    builder
+    let app = builder
         .manage(state)
         .setup(|app| {
             // 系统托盘：左键显示主窗口，右键菜单（仅桌面端）
@@ -586,6 +586,22 @@ pub fn run() {
             pick_directory, pick_files,
             open_chat_window, get_platform, refresh_peers,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    // macOS：点击 Dock 图标重新打开主窗口。
+    // "关闭"按钮的行为是隐藏到托盘（见 on_window_event），窗口隐藏后
+    // 托盘左键点击有专门处理，但 Dock 图标点击走 RunEvent::Reopen 事件，
+    // 此前未处理该事件，导致关闭后再点 Dock 图标无任何反应（打不开）。
+    // 注：Reopen 仅 macOS 触发，故按平台条件编译。
+    app.run(|_app_handle, _event| {
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen { .. } = _event {
+            if let Some(w) = _app_handle.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }
+    });
 }
