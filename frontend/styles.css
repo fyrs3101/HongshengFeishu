@@ -1538,15 +1538,11 @@ textarea {
   }
 }
 
-/* macOS：隐藏 HTML 交通灯（系统原生交通灯已显示），留出左侧空间 */
-body.plat-macos .traffic {
-  display: none;
-}
+/* macOS：本应用 decorations:false（无边框窗口），系统不会提供原生交通灯，
+   因此保留 HTML 交通灯（红黄绿三点，左上角，即 macOS 经典样式）。
+   此前版本曾在此处 display:none 试图让位给原生交通灯，反而导致按钮全消失。 */
 body.plat-macos .win-title {
-  margin-left: 68px;
-}
-body.plat-macos .titlebar {
-  padding-left: 8px;
+  margin-left: 4px;
 }
 
 /* Windows / Linux：窗口按钮按桌面习惯放右上角，顺序为 最小化→最大化→关闭，

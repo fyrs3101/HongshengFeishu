@@ -358,7 +358,13 @@
       // 桌面端用系统对话框拿真实路径；移动端用文件选择器走字节上传
       if (!HSF.IS_MOBILE) {
         try {
-          const selected = await HSF.invoke("plugin:dialog|open", { options: { multiple: true } });
+          // 优先插件命令，失败回退 Rust 兜底命令
+          let selected = null;
+          try {
+            selected = await HSF.invoke("plugin:dialog|open", { options: { multiple: true } });
+          } catch (pluginErr) {
+            selected = await HSF.invoke("pick_files");
+          }
           if (!selected) return;
           const paths = Array.isArray(selected) ? selected : [selected];
           for (const p of paths) {
@@ -367,7 +373,7 @@
             );
           }
         } catch (e) {
-          HSF.toast("无法打开文件选择器");
+          HSF.toast("无法打开文件选择器：" + (e && e.message ? e.message : e));
         }
         return;
       }

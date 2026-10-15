@@ -280,17 +280,24 @@
   /* ---------- 文件选择发送 ---------- */
   async function pickAndSend(uid, dir = false) {
     try {
-      // withGlobalTauri 模式下插件 API 不挂 window.__TAURI__，直接调插件命令
-      const selected = dir
-        ? await HSF.invoke("plugin:dialog|open", { options: { directory: true } })
-        : await HSF.invoke("plugin:dialog|open", { options: { multiple: true } });
+      // 优先走 dialog 插件命令；失败时回退 Rust 兜底命令
+      let selected = null;
+      try {
+        selected = dir
+          ? await HSF.invoke("plugin:dialog|open", { options: { directory: true } })
+          : await HSF.invoke("plugin:dialog|open", { options: { multiple: true } });
+      } catch (pluginErr) {
+        selected = dir
+          ? await HSF.invoke("pick_directory")
+          : await HSF.invoke("pick_files");
+      }
       if (!selected) return;
       const paths = Array.isArray(selected) ? selected : [selected];
       for (const p of paths) {
         HSF.invoke("send_file", { peerUid: uid, path: p }).catch((e) => HSF.toast("发送失败：" + e));
       }
     } catch (e) {
-      HSF.toast("无法打开文件选择器");
+      HSF.toast("无法打开文件选择器：" + (e && e.message ? e.message : e));
     }
   }
 
@@ -553,10 +560,16 @@
     });
     $("stInboxPick").onclick = async () => {
       try {
-        const dir = await HSF.invoke("plugin:dialog|open", { options: { directory: true } });
+        // 优先插件命令，失败回退 Rust 兜底命令
+        let dir = null;
+        try {
+          dir = await HSF.invoke("plugin:dialog|open", { options: { directory: true } });
+        } catch (pluginErr) {
+          dir = await HSF.invoke("pick_directory");
+        }
         if (dir) $("stInbox").value = dir;
       } catch (e) {
-        HSF.toast("无法打开目录选择器");
+        HSF.toast("无法打开目录选择器：" + (e && e.message ? e.message : e));
       }
     };
 

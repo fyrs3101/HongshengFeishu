@@ -10,3 +10,4 @@ dist/
 
 # 系统垃圾
 .DS_Store
+core

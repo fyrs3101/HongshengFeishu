@@ -405,6 +405,53 @@ fn win_close(window: tauri::Window) -> Result<(), String> {
     window.close().map_err(|e| e.to_string())
 }
 
+/// 选择目录（Rust 侧直连 rfd 原生选择器，作为前端插件调用的兜底通道）。
+/// 前端优先走 plugin:dialog|open；若因 ACL/环境问题失败，再调本命令。
+/// 本命令是自定义 Tauri 命令，不经插件 ACL，任何窗口均可调用。
+/// 返回 None 表示用户取消；Err 表示底层对话框不可用。
+#[tauri::command]
+async fn pick_directory(window: tauri::Window) -> Result<Option<String>, String> {
+    #[cfg(mobile)]
+    {
+        let _ = window;
+        return Err("移动端不支持目录选择".into());
+    }
+    #[cfg(desktop)]
+    {
+        let mut dlg = rfd::AsyncFileDialog::new().set_title("选择收件目录");
+        #[cfg(desktop)]
+        {
+            dlg = dlg.set_parent(&window);
+        }
+        let picked = dlg.pick_folder().await;
+        Ok(picked.map(|h| h.path().to_string_lossy().to_string()))
+    }
+}
+
+/// 选择多个文件（兜底通道，同 pick_directory）
+#[tauri::command]
+async fn pick_files(window: tauri::Window) -> Result<Option<Vec<String>>, String> {
+    #[cfg(mobile)]
+    {
+        let _ = window;
+        return Err("移动端不支持文件选择".into());
+    }
+    #[cfg(desktop)]
+    {
+        let mut dlg = rfd::AsyncFileDialog::new().set_title("选择要发送的文件");
+        #[cfg(desktop)]
+        {
+            dlg = dlg.set_parent(&window);
+        }
+        let picked = dlg.pick_files().await;
+        Ok(picked.map(|v| {
+            v.into_iter()
+                .map(|h| h.path().to_string_lossy().to_string())
+                .collect()
+        }))
+    }
+}
+
 /// 打开（或聚焦）与某联系人的聊天窗口；移动端改为事件通知前端展示覆盖层
 #[tauri::command]
 fn open_chat_window(app: tauri::AppHandle, state: tauri::State<AppState>, uid: String) -> Result<(), String> {
@@ -536,6 +583,7 @@ pub fn run() {
             send_text, send_file, begin_file_bytes, push_file_chunk, finish_file_bytes,
             respond_offer, decrypt_text,
             open_path, win_minimize, win_close,
+            pick_directory, pick_files,
             open_chat_window, get_platform, refresh_peers,
         ])
         .run(tauri::generate_context!())

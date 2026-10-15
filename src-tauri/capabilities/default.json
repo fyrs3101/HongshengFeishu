@@ -1,7 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "鸿升飞书默认权限（对主窗口及动态创建的聊天/设置/传输窗口均生效）",
+  "description": "鸿升飞书默认权限（主窗口 + 动态创建的聊天/设置/传输窗口）",
+  "windows": ["main", "chat*", "settings", "transfers"],
   "permissions": [
     "core:default",
     "core:event:default",
