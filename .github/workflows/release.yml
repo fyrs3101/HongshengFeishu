@@ -93,16 +93,16 @@ jobs:
 
             | 安装包 | 适用平台 | 安装方式 |
             | --- | --- | --- |
-            | `HongshengFeishu-1.2.1-macOS-arm64.dmg` | macOS（Apple Silicon：M1/M2/M3/M4 等） | 双击打开磁盘映像，将「鸿升飞书」拖入「应用程序」文件夹 |
-            | `HongshengFeishu-1.2.1-windows-x64-portable.exe` | Windows 10 / 11（64 位） | **免安装单机版（推荐）**：下载后双击直接运行，无需安装、无管理员权限要求；仅需系统自带 WebView2 运行时（Windows 10/11 默认具备），可整文件拷贝到 U 盘随身携带 |
-            | `HongshengFeishu-1.2.1-windows-x64-setup.exe` | Windows 10 / 11（64 位） | 传统安装版：双击运行安装程序，按提示完成安装 |
-            | `HongshengFeishu-1.2.1-android.apk` | Android 8.0 及以上（arm64 / armeabi，含华为等机型） | 下载到手机后点击安装（旁加载） |
+            | `HongshengFeishu-${{ github.ref_name }}-macOS-arm64.dmg` | macOS（Apple Silicon：M1/M2/M3/M4 等） | 双击打开磁盘映像，将「鸿升飞书」拖入「应用程序」文件夹 |
+            | `HongshengFeishu-${{ github.ref_name }}-windows-x64-portable.exe` | Windows 10 / 11（64 位） | **免安装单机版（推荐）**：下载后双击直接运行，无需安装、无管理员权限要求；仅需系统自带 WebView2 运行时（Windows 10/11 默认具备），可整文件拷贝到 U 盘随身携带 |
+            | `HongshengFeishu-${{ github.ref_name }}-windows-x64-setup.exe` | Windows 10 / 11（64 位） | 传统安装版：双击运行安装程序，按提示完成安装 |
+            | `HongshengFeishu-${{ github.ref_name }}-android.apk` | Android 8.0 及以上（arm64 / armeabi，含华为等机型） | 下载到手机后点击安装（旁加载） |
 
             > 说明：GitHub 的下载文件名不支持中文，故安装包使用拼音命名；安装完成后，设备上显示的软件名称仍为「鸿升飞书」。
 
             ### 华为手机安装 APK 步骤
 
-            1. 将 `HongshengFeishu-1.2.1-android.apk` 下载到手机（或用数据线、微信文件传输助手传到手机）；
+            1. 将 `HongshengFeishu-${{ github.ref_name }}-android.apk` 下载到手机（或用数据线、微信文件传输助手传到手机）；
             2. 进入「设置 → 安全 → 更多安全设置」，允许「外部来源应用下载」；
             3. 点击 APK 文件，如弹出「未知应用」提示，按指引允许本次安装；
             4. 打开「鸿升飞书」，确保手机与电脑连接同一 Wi-Fi，即可自动发现好友，互传文字、文件与文件夹。
@@ -217,16 +217,16 @@ jobs:
 
             | 安装包 | 适用平台 | 安装方式 |
             | --- | --- | --- |
-            | `HongshengFeishu-1.2.1-macOS-arm64.dmg` | macOS（Apple Silicon：M1/M2/M3/M4 等） | 双击打开磁盘映像，将「鸿升飞书」拖入「应用程序」文件夹 |
-            | `HongshengFeishu-1.2.1-windows-x64-portable.exe` | Windows 10 / 11（64 位） | **免安装单机版（推荐）**：下载后双击直接运行，无需安装、无管理员权限要求；仅需系统自带 WebView2 运行时（Windows 10/11 默认具备），可整文件拷贝到 U 盘随身携带 |
-            | `HongshengFeishu-1.2.1-windows-x64-setup.exe` | Windows 10 / 11（64 位） | 传统安装版：双击运行安装程序，按提示完成安装 |
-            | `HongshengFeishu-1.2.1-android.apk` | Android 8.0 及以上（arm64 / armeabi，含华为等机型） | 下载到手机后点击安装（旁加载） |
+            | `HongshengFeishu-${{ github.ref_name }}-macOS-arm64.dmg` | macOS（Apple Silicon：M1/M2/M3/M4 等） | 双击打开磁盘映像，将「鸿升飞书」拖入「应用程序」文件夹 |
+            | `HongshengFeishu-${{ github.ref_name }}-windows-x64-portable.exe` | Windows 10 / 11（64 位） | **免安装单机版（推荐）**：下载后双击直接运行，无需安装、无管理员权限要求；仅需系统自带 WebView2 运行时（Windows 10/11 默认具备），可整文件拷贝到 U 盘随身携带 |
+            | `HongshengFeishu-${{ github.ref_name }}-windows-x64-setup.exe` | Windows 10 / 11（64 位） | 传统安装版：双击运行安装程序，按提示完成安装 |
+            | `HongshengFeishu-${{ github.ref_name }}-android.apk` | Android 8.0 及以上（arm64 / armeabi，含华为等机型） | 下载到手机后点击安装（旁加载） |
 
             > 说明：GitHub 的下载文件名不支持中文，故安装包使用拼音命名；安装完成后，设备上显示的软件名称仍为「鸿升飞书」。
 
             ### 华为手机安装 APK 步骤
 
-            1. 将 `HongshengFeishu-1.2.1-android.apk` 下载到手机（或用数据线、微信文件传输助手传到手机）；
+            1. 将 `HongshengFeishu-${{ github.ref_name }}-android.apk` 下载到手机（或用数据线、微信文件传输助手传到手机）；
             2. 进入「设置 → 安全 → 更多安全设置」，允许「外部来源应用下载」；
             3. 点击 APK 文件，如弹出「未知应用」提示，按指引允许本次安装；
             4. 打开「鸿升飞书」，确保手机与电脑连接同一 Wi-Fi，即可自动发现好友，互传文字、文件与文件夹。
