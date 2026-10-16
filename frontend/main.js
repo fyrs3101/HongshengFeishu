@@ -131,9 +131,16 @@
       return ao - bo;
     });
     if (!filtered.length) {
-      list.innerHTML = `<li class="empty">${
-        peers.length ? "没有匹配的联系人" : "正在发现网段内的同事…<br>请确认对方已打开鸿升飞书且在同一网络"
-      }</li>`;
+      const emptyTip = peers.length
+        ? "没有匹配的联系人"
+        : "正在发现网段内的同事…<br>请确认对方已打开鸿升飞书且在同一网络";
+      const diagBtn = peers.length
+        ? ""
+        : `<br><button class="diag-entry" id="netDiagBtn">发现不了？点此排查</button>`;
+      list.innerHTML = `<li class="empty">${emptyTip}${diagBtn}</li>`;
+      if (!peers.length && $("netDiagBtn")) {
+        $("netDiagBtn").onclick = openNetDiag;
+      }
       return;
     }
     for (const p of filtered) {
@@ -466,6 +473,127 @@
     HSF.listen("open-chat", (ev) => {
       if (ev.payload) openChat(ev.payload);
     });
+
+    // 系统通知条（Windows 防火墙拦截提示等，Rust 侧 notice 事件）
+    HSF.listen("notice", (ev) => {
+      showNotice(ev.payload);
+    });
+  }
+
+  /* ---------- 系统通知条 ---------- */
+  function showNotice(n) {
+    if (!n || !n.title) return;
+    let bar = $("noticeBar");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "noticeBar";
+      bar.className = "notice-bar";
+      bar.hidden = true;
+      document.body.appendChild(bar);
+    }
+    const isFw = n.kind === "firewall";
+    bar.innerHTML = `
+      <div class="nb-body">
+        <div class="nb-title">${HSF.escapeHtml(n.title)}</div>
+        <div class="nb-text">${HSF.escapeHtml(n.body || "")}</div>
+      </div>
+      <div class="nb-actions">
+        ${
+          isFw
+            ? `<button class="nb-btn primary" id="nbFix">一键修复</button>
+               <button class="nb-btn" id="nbGuide">手动指引</button>`
+            : ""
+        }
+        <button class="nb-close" id="nbClose" title="不再提示">✕</button>
+      </div>`;
+    bar.hidden = false;
+    const fix = $("nbFix");
+    if (fix)
+      fix.onclick = () => {
+        fixFirewall();
+        closeNotice();
+      };
+    const guide = $("nbGuide");
+    if (guide)
+      guide.onclick = () => {
+        openFwSettings();
+        closeNotice();
+      };
+    $("nbClose").onclick = () => {
+      closeNotice();
+      HSF.invoke("dismiss_firewall_notice").catch(() => {});
+    };
+  }
+  function closeNotice() {
+    const bar = $("noticeBar");
+    if (bar) bar.hidden = true;
+  }
+
+  /* ---------- 网络诊断（"发现不了？"排查入口） ---------- */
+  async function openNetDiag() {
+    let d;
+    try {
+      d = await HSF.invoke("net_diag");
+    } catch (e) {
+      HSF.toast("诊断失败：" + e);
+      return;
+    }
+    const rows = [
+      ["本机 IP", HSF.escapeHtml(d.ip || "")],
+      ["操作系统", HSF.escapeHtml(HSF.osLabel(d.os))],
+      ["发现端口", `UDP ${d.udp_port}`],
+      ["传输端口", `TCP ${d.tcp_port}`],
+      ["发现监听", d.listener_ok ? "正常" : "异常（持续重试中）"],
+      ["已发广播", `${d.udp_sent} 帧`],
+      ["已收广播", `${d.udp_recv} 帧`],
+      ["在线联系人", `${d.peers} 人`],
+      ["防火墙放行", d.firewall_ok ? "已放行" : "未放行"],
+      ["广播目标", (d.targets || []).map((t) => HSF.escapeHtml(t)).join("<br>")],
+    ];
+    const hints = (d.hints || [])
+      .map((h) => `<li>${HSF.escapeHtml(h)}</li>`)
+      .join("");
+    const needFw = d.os === "windows" && !d.firewall_ok;
+    const v = await HSF.showModal({
+      title: "网络诊断",
+      html:
+        `<div class="diag-rows">` +
+        rows
+          .map(
+            ([k, val]) =>
+              `<div class="diag-row"><span class="diag-k">${HSF.escapeHtml(
+                k
+              )}</span><span class="diag-v">${val}</span></div>`
+          )
+          .join("") +
+        `</div>` +
+        (hints
+          ? `<div class="diag-hints"><b>排查建议：</b><ul>${hints}</ul></div>`
+          : ""),
+      buttons: needFw
+        ? [
+            { text: "一键修复防火墙", primary: true, value: "fix" },
+            { text: "手动放行指引", value: "guide" },
+            { text: "关闭" },
+          ]
+        : [{ text: "知道了", primary: true }],
+    });
+    if (v === "fix") fixFirewall();
+    else if (v === "guide") openFwSettings();
+  }
+
+  async function fixFirewall() {
+    HSF.toast("请在弹出窗口点「是」授权（UAC）", "info", 4500);
+    try {
+      await HSF.invoke("fix_firewall");
+      HSF.toast("修复脚本已启动，执行完成后请重试发现", "info", 5000);
+    } catch (e) {
+      HSF.toast("修复失败：" + e + "，请按手动指引操作", "err", 6000);
+    }
+  }
+
+  function openFwSettings() {
+    HSF.invoke("open_firewall_settings").catch(() => {});
   }
 
   async function handleOffer(o) {
@@ -632,8 +760,13 @@
         try {
           const w = HSF.T.window.getCurrent();
           const max = await w.isMaximized();
-          if (max) await w.unmaximize();
-          else await w.maximize();
+          if (max) {
+            await w.unmaximize();
+            document.body.classList.remove("win-max");
+          } else {
+            await w.maximize();
+            document.body.classList.add("win-max");
+          }
         } catch (e) {}
       };
 

@@ -71,6 +71,22 @@ pub struct InnerState {
     pub chat_windows: HashMap<String, String>,
     /// 移动端分块上传暂存：transfer_id -> 临时文件路径
     pub staging: HashMap<String, PathBuf>,
+    // ---- 网络诊断计数器（net_diag 命令输出，供用户自查"为什么发现不了"） ----
+    /// 已发送的发现广播帧数
+    pub udp_sent: u64,
+    /// 已接收的发现广播帧数
+    pub udp_recv: u64,
+    /// UDP 发现监听端口是否绑定成功
+    pub listener_ok: bool,
+    /// 防火墙提示是否已在本运行周期内提示过（避免每次启动都弹）
+    pub fw_hint_shown: bool,
+}
+
+/// 防中毒加锁：任一线程在持锁时 panic 会毒化 Mutex，
+/// 导致发现/监听线程后续全部 lock().unwrap() 级联 panic 而静默死亡
+/// （表现为"自动与刷新都发现不了"）。这里统一改为恢复锁内容。
+pub fn lock_state(s: &Mutex<InnerState>) -> std::sync::MutexGuard<'_, InnerState> {
+    s.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 #[derive(Clone)]

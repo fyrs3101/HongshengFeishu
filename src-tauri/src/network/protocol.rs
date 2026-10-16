@@ -10,8 +10,11 @@ use sha2::{Digest, Sha256};
 
 pub const MAGIC: &str = "HSFP";
 pub const PROTOCOL_VERSION: u8 = 2;
-/// UDP 广播发现端口
+/// UDP 广播发现端口（固定：防火墙规则可按端口放行）
 pub const DISCOVERY_PORT: u16 = 24680;
+/// TCP 消息/文件传输端口（固定：飞鸽传书同样使用固定端口；
+/// 固定端口还能消除"首帧通告端口为 0"的竞态，并让防火墙规则可按端口书写）
+pub const TCP_PORT: u16 = 24681;
 /// 子网广播地址
 pub const DISCOVERY_ADDR: &str = "255.255.255.255:24680";
 /// 联系人离线判定：超过 13 秒（约 4 个广播周期）未见到广播视为下线

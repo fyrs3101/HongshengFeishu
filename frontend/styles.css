@@ -115,6 +115,30 @@ textarea {
   border-radius: 50%;
   border: none;
   padding: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0, 0, 0, 0.55);
+  -webkit-app-region: no-drag;
+}
+/* 字形：默认隐藏，按平台显隐 */
+.gly {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+}
+/* macOS：悬停整组交通灯时才显示字形（原生行为） */
+body.plat-macos .gly-mac {
+  display: none;
+}
+body.plat-macos .traffic:hover .gly-mac {
+  display: block;
+}
+/* Windows / Linux：字形常显（默认深灰，悬停加深） */
+body.plat-windows .gly-win,
+body.plat-linux .gly-win {
+  display: block;
 }
 .tl-close {
   background: #ff5f57;
@@ -1001,6 +1025,138 @@ textarea {
   padding: 12px 18px;
   border-top: 1px solid var(--line);
   background: var(--panel-soft);
+}
+
+/* ---------- 系统通知条（防火墙提示等） ---------- */
+.notice-bar {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  width: min(560px, calc(100vw - 24px));
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #fff8e6;
+  border: 1px solid #f5d97a;
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(120, 100, 30, 0.18);
+}
+.notice-bar[hidden] {
+  display: none;
+}
+.notice-bar .nb-body {
+  flex: 1;
+  min-width: 0;
+}
+.notice-bar .nb-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #7a5b00;
+  margin-bottom: 2px;
+}
+.notice-bar .nb-text {
+  font-size: 12px;
+  color: #8a6d1a;
+  line-height: 1.5;
+}
+.notice-bar .nb-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.notice-bar .nb-btn {
+  border: 1px solid #e3cf8a;
+  background: #fff;
+  color: #7a5b00;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.notice-bar .nb-btn:hover {
+  background: #fdf3d8;
+}
+.notice-bar .nb-btn.primary {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+.notice-bar .nb-btn.primary:hover {
+  filter: brightness(1.08);
+}
+.notice-bar .nb-close {
+  border: none;
+  background: transparent;
+  color: #b09a55;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.notice-bar .nb-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #7a5b00;
+}
+
+/* ---------- 网络诊断 ---------- */
+.diag-entry {
+  margin-top: 10px;
+  border: 1px solid var(--blue);
+  background: transparent;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.diag-entry:hover {
+  background: var(--blue);
+  color: #fff;
+}
+.diag-rows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+}
+.diag-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12.5px;
+  padding: 5px 9px;
+  background: var(--panel-soft);
+  border-radius: 7px;
+  min-width: 0;
+}
+.diag-row .diag-k {
+  color: var(--muted);
+  flex: none;
+}
+.diag-row .diag-v {
+  font-weight: 600;
+  text-align: right;
+  word-break: break-all;
+}
+.diag-hints {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.6;
+}
+.diag-hints ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.diag-hints li {
+  margin-bottom: 4px;
 }
 
 /* ---------- 表单 ---------- */
@@ -1951,13 +2107,17 @@ body.plat-macos .win-title {
   margin-left: 4px;
 }
 
-/* Windows / Linux：窗口按钮按桌面习惯放右上角，顺序为 最小化→最大化→关闭，
-   颜色语义与 Windows 一致（默认浅灰，悬停加深，关闭键悬停变红） */
+/* Windows / Linux：Windows 11 风格全高 Caption 按钮（46×46，与标题栏等高），
+   顺序 最小化→最大化→关闭。默认透明底 + 深灰字形（常显，彻底解决"看不清"），
+   悬停浅灰填充、按下加深，关闭键悬停 Windows 标准红 #e81123 白字。
+   命中区与标题栏同高，任何位置都能轻松点中。 */
 body.plat-windows .traffic,
 body.plat-linux .traffic {
   order: 10;
   margin-right: 0;
   margin-left: 14px;
+  gap: 0;
+  align-self: stretch;
 }
 body.plat-windows .tl-min,
 body.plat-linux .tl-min {
@@ -1973,17 +2133,39 @@ body.plat-linux .tl-close {
 }
 body.plat-windows .traffic button,
 body.plat-linux .traffic button {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #c9cfda;
-  transition: background 0.15s;
+  width: 46px;
+  height: 100%;
+  border-radius: 0;
+  background: transparent;
+  color: #5b6572;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 body.plat-windows .traffic button:hover,
 body.plat-linux .traffic button:hover {
-  background: #aab3c2;
+  background: rgba(0, 0, 0, 0.06);
+  color: #1f2937;
+}
+body.plat-windows .traffic button:active,
+body.plat-linux .traffic button:active {
+  background: rgba(0, 0, 0, 0.1);
 }
 body.plat-windows .tl-close:hover,
 body.plat-linux .tl-close:hover {
-  background: #ff5f57;
+  background: #e81123; /* Windows 11 关闭键标准红 */
+  color: #ffffff;
+}
+body.plat-windows .tl-close:active,
+body.plat-linux .tl-close:active {
+  background: #c50f1f;
+  color: #ffffff;
+}
+/* 最大化后切换为"还原"字形（两个叠放矩形） */
+body.plat-windows .glyph-restore {
+  display: none;
+}
+body.plat-windows.win-max .glyph-restore {
+  display: block;
+}
+body.plat-windows.win-max .tl-max .gly-win:not(.glyph-restore) {
+  display: none;
 }

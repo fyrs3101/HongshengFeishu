@@ -11,3 +11,7 @@ dist/
 # 系统垃圾
 .DS_Store
 core
+
+# npm 锁文件与沙箱崩溃转储
+package-lock.json
+core.*

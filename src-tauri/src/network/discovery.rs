@@ -7,7 +7,7 @@ use std::time::Duration;
 use tauri::Emitter;
 
 use crate::network::protocol::*;
-use crate::state::InnerState;
+use crate::state::{lock_state, InnerState};
 
 /// 枚举本机所有"发得出广播"的网卡（UP + 非回环 + 支持广播），
 /// 计算各自的子网定向广播地址（IP | ~掩码）。
@@ -71,6 +71,14 @@ fn announce_targets() -> Vec<SocketAddr> {
     v
 }
 
+/// 广播目标集合（供诊断命令展示：用户可据此核对与对端是否同网段）
+pub fn broadcast_targets_debug() -> Vec<String> {
+    announce_targets()
+        .iter()
+        .map(|a| a.to_string())
+        .collect()
+}
+
 /// 向所有广播目标发送一帧通告
 fn send_to_all(socket: &UdpSocket, payload: &[u8]) {
     for target in announce_targets() {
@@ -92,9 +100,50 @@ pub fn start_discovery(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
         };
         let _ = socket.set_broadcast(true);
 
+        // 启动突发：t=0 / +0.3s / +0.9s 连发三帧，
+        // 让对端几乎在启动瞬间就能看到我们（旧实现要等最多 3 秒的首帧）
+        for delay in [0u64, 300, 900] {
+            if delay > 0 {
+                thread::sleep(Duration::from_millis(delay));
+            }
+            let (running, uid, nick, group, port, status) = {
+                let s = lock_state(&st_broadcast);
+                (
+                    s.running,
+                    s.self_uid.clone(),
+                    s.settings.nick.clone(),
+                    s.settings.group.clone(),
+                    s.self_port,
+                    s.settings.status.clone(),
+                )
+            };
+            if !running {
+                return;
+            }
+            if status != "invisible" {
+                let announce = Announce {
+                    magic: MAGIC.to_string(),
+                    ver: PROTOCOL_VERSION,
+                    kind: "online".to_string(),
+                    uid: uid.clone(),
+                    nick,
+                    group,
+                    host: host_name(),
+                    port,
+                    os: os_name(),
+                    status: status.clone(),
+                    app: "HongShengFeishu".to_string(),
+                };
+                if let Ok(p) = serde_json::to_vec(&announce) {
+                    send_to_all(&socket, &p);
+                    lock_state(&st_broadcast).udp_sent += 1;
+                }
+            }
+        }
+
         loop {
             let (running, uid, nick, group, port, status) = {
-                let s = st_broadcast.lock().unwrap();
+                let s = lock_state(&st_broadcast);
                 (
                     s.running,
                     s.self_uid.clone(),
@@ -123,6 +172,7 @@ pub fn start_discovery(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
                 };
                 if let Ok(p) = serde_json::to_vec(&announce) {
                     send_to_all(&socket, &p);
+                    lock_state(&st_broadcast).udp_sent += 1;
                 }
             }
             thread::sleep(Duration::from_secs(3));
@@ -131,16 +181,28 @@ pub fn start_discovery(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
 
     // 监听线程：接收广播，维护联系人表，清理过期联系人
     thread::spawn(move || {
-        let sock = match UdpSocket::bind(format!("0.0.0.0:{}", DISCOVERY_PORT)) {
-            Ok(s) => s,
-            Err(_) => return,
+        // 绑定失败（端口被其他软件/残留实例占用）不退出：每 2 秒重试，
+        // 直到成功或 running=false——旧代码直接 return，会导致本次运行
+        // 永远收不到任何广播（自动与刷新都发现不了的直接原因之一）
+        let sock = loop {
+            match UdpSocket::bind(format!("0.0.0.0:{}", DISCOVERY_PORT)) {
+                Ok(s) => break s,
+                Err(_) => {
+                    lock_state(&st_listen).listener_ok = false;
+                    if !lock_state(&st_listen).running {
+                        return;
+                    }
+                    thread::sleep(Duration::from_secs(2));
+                }
+            }
         };
+        lock_state(&st_listen).listener_ok = true;
         let _ = sock.set_read_timeout(Some(Duration::from_millis(500)));
 
         let mut buf = [0u8; 65536];
         let mut last_prune = now_ms();
         loop {
-            if !st_listen.lock().unwrap().running {
+            if !lock_state(&st_listen).running {
                 break;
             }
             match sock.recv_from(&mut buf) {
@@ -149,7 +211,8 @@ pub fn start_discovery(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
                         if !ann.valid() {
                             continue;
                         }
-                        let self_uid = st_listen.lock().unwrap().self_uid.clone();
+                        lock_state(&st_listen).udp_recv += 1;
+                        let self_uid = lock_state(&st_listen).self_uid.clone();
                         if ann.uid == self_uid {
                             continue;
                         }
@@ -158,7 +221,7 @@ pub fn start_discovery(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
                         // 下线广播：立即移除
                         if ann.kind == "bye" {
                             let existed = {
-                                let mut s = st_listen.lock().unwrap();
+                                let mut s = lock_state(&st_listen);
                                 s.peers.remove(&ann.uid).is_some()
                             };
                             if existed {
@@ -179,7 +242,7 @@ pub fn start_discovery(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
                             last_seen: now_ms(),
                         };
                         let is_new = {
-                            let mut s = st_listen.lock().unwrap();
+                            let mut s = lock_state(&st_listen);
                             let was = s.peers.contains_key(&peer.uid);
                             s.peers.insert(peer.uid.clone(), peer);
                             was
@@ -199,7 +262,7 @@ pub fn start_discovery(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
             if now - last_prune >= 2_000 {
                 last_prune = now;
                 let changed = {
-                    let mut s = st_listen.lock().unwrap();
+                    let mut s = lock_state(&st_listen);
                     let before = s.peers.len();
                     s.peers
                         .retain(|_, p| now.saturating_sub(p.last_seen) < PEER_TIMEOUT_MS);
@@ -214,7 +277,7 @@ pub fn start_discovery(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
 }
 
 fn emit_peers(app: &tauri::AppHandle, state: &Arc<Mutex<InnerState>>) {
-    let peers: Vec<Peer> = state.lock().unwrap().peers.values().cloned().collect();
+    let peers: Vec<Peer> = lock_state(&state).peers.values().cloned().collect();
     #[cfg(desktop)]
     crate::update_tray_tooltip(app, peers.len());
     let _ = app.emit("peers", peers);
@@ -223,7 +286,7 @@ fn emit_peers(app: &tauri::AppHandle, state: &Arc<Mutex<InnerState>>) {
 /// 向指定 IP 单播一个 hello（让对方立即知道我们在线及端口）
 pub fn unicast_hello(state: &Arc<Mutex<InnerState>>, ip: &str) {
     let (uid, nick, group, port, status) = {
-        let s = state.lock().unwrap();
+        let s = lock_state(&state);
         (
             s.self_uid.clone(),
             s.settings.nick.clone(),
@@ -258,7 +321,7 @@ pub fn broadcast_bye(state: &Arc<Mutex<InnerState>>) {
     if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
         let _ = socket.set_broadcast(true);
         let (uid, nick, group, port) = {
-            let s = state.lock().unwrap();
+            let s = lock_state(&state);
             (
                 s.self_uid.clone(),
                 s.settings.nick.clone(),
@@ -288,7 +351,7 @@ pub fn broadcast_bye(state: &Arc<Mutex<InnerState>>) {
 /// 立即广播一次在线通告（刷新按钮用）
 pub fn refresh(state: &Arc<Mutex<InnerState>>) {
     let (uid, nick, group, port, status) = {
-        let s = state.lock().unwrap();
+        let s = lock_state(&state);
         (
             s.self_uid.clone(),
             s.settings.nick.clone(),
@@ -317,6 +380,7 @@ pub fn refresh(state: &Arc<Mutex<InnerState>>) {
         };
         if let Ok(p) = serde_json::to_vec(&announce) {
             send_to_all(&socket, &p);
+            lock_state(state).udp_sent += 1;
         }
     }
 }

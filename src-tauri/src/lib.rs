@@ -17,7 +17,7 @@ use tauri::{Emitter, Manager, WindowEvent};
 use network::discovery;
 use network::protocol::*;
 use network::transfer;
-use state::{AppState, Settings};
+use state::{lock_state, AppState, Settings};
 
 /// 全局托盘图标（桌面端，用于刷新提示文本）
 #[cfg(desktop)]
@@ -82,7 +82,7 @@ fn start(
     nick: Option<String>,
 ) -> Result<(), String> {
     {
-        let mut s = state.0.lock().unwrap();
+        let mut s = lock_state(&state.0);
         if s.running {
             return Ok(());
         }
@@ -102,9 +102,12 @@ fn start(
         // 载入历史聊天记录
         let history = persist::load_messages(&app);
         s.messages = history;
+        // 固定 TCP 端口先行写入：发现线程启动后首帧广播即携带正确端口。
+        // 旧代码先起发现后起监听，首 3 秒通告端口为 0，对端收到后无法回连。
+        s.self_port = TCP_PORT;
     }
     let inbox = {
-        let s = state.0.lock().unwrap();
+        let s = lock_state(&state.0);
         s.settings
             .inbox_dir
             .clone()
@@ -118,14 +121,19 @@ fn start(
     };
     let _ = fs::create_dir_all(&inbox);
     {
-        let mut s = state.0.lock().unwrap();
+        let mut s = lock_state(&state.0);
         s.inbox_dir = inbox.to_string_lossy().to_string();
         s.running = true;
     }
-    discovery::start_discovery(app.clone(), state.0.clone());
+    // 顺序：先起 TCP 监听（绑定固定端口并写回实际端口），再起发现广播，
+    // 保证任何一帧通告携带的端口都是已就绪的监听端口
     transfer::start_listener(app.clone(), state.0.clone());
+    discovery::start_discovery(app.clone(), state.0.clone());
     persist::spawn_persister(app.clone(), state.0.clone());
-    apply_autostart(&app, state.0.lock().unwrap().settings.auto_start);
+    // Windows：确保防火墙放行 UDP 24680 / TCP 24681（失败则通知前端引导用户）
+    #[cfg(target_os = "windows")]
+    network::firewall::ensure_allowed(&app, &state.0.clone());
+    apply_autostart(&app, lock_state(&state.0).settings.auto_start);
     Ok(())
 }
 
@@ -133,7 +141,7 @@ fn start(
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle, state: tauri::State<AppState>) {
     {
-        let mut s = state.0.lock().unwrap();
+        let mut s = lock_state(&state.0);
         s.running = false;
     }
     persist::save_messages(&app, &state.0.clone());
@@ -145,7 +153,7 @@ fn quit_app(app: tauri::AppHandle, state: tauri::State<AppState>) {
 #[tauri::command]
 fn stop(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), String> {
     {
-        let mut s = state.0.lock().unwrap();
+        let mut s = lock_state(&state.0);
         s.running = false;
         s.peers.clear();
     }
@@ -159,13 +167,13 @@ fn stop(app: tauri::AppHandle, state: tauri::State<AppState>) -> Result<(), Stri
 
 #[tauri::command]
 fn list_peers(state: tauri::State<AppState>) -> Vec<Peer> {
-    let s = state.0.lock().unwrap();
+    let s = lock_state(&state.0);
     s.peers.values().cloned().collect()
 }
 
 #[tauri::command]
 fn get_self(state: tauri::State<AppState>) -> serde_json::Value {
-    let s = state.0.lock().unwrap();
+    let s = lock_state(&state.0);
     serde_json::json!({
         "uid": s.self_uid,
         "nick": s.settings.nick,
@@ -180,7 +188,7 @@ fn get_self(state: tauri::State<AppState>) -> serde_json::Value {
 
 #[tauri::command]
 fn get_settings(state: tauri::State<AppState>) -> Settings {
-    state.0.lock().unwrap().settings.clone()
+    lock_state(&state.0).settings.clone()
 }
 
 #[tauri::command]
@@ -189,10 +197,10 @@ fn save_settings(
     state: tauri::State<AppState>,
     settings: Settings,
 ) -> Result<(), String> {
-    let old_auto = state.0.lock().unwrap().settings.auto_start;
+    let old_auto = lock_state(&state.0).settings.auto_start;
     persist_settings(&app, &settings)?;
     {
-        let mut s = state.0.lock().unwrap();
+        let mut s = lock_state(&state.0);
         s.settings = settings.clone();
     }
     if settings.auto_start != old_auto {
@@ -210,7 +218,7 @@ fn set_alias(
     uid: String,
     alias: String,
 ) -> Result<(), String> {
-    let mut settings = state.0.lock().unwrap().settings.clone();
+    let mut settings = lock_state(&state.0).settings.clone();
     if alias.trim().is_empty() {
         settings.aliases.remove(&uid);
     } else {
@@ -218,7 +226,7 @@ fn set_alias(
     }
     persist_settings(&app, &settings)?;
     {
-        let mut s = state.0.lock().unwrap();
+        let mut s = lock_state(&state.0);
         s.settings = settings.clone();
     }
     let _ = app.emit("settings-changed", settings);
@@ -240,7 +248,7 @@ fn list_messages(state: tauri::State<AppState>, uid: String) -> Vec<ChatMessage>
 /// 全部文件传输记录（传输管理窗口用）
 #[tauri::command]
 fn list_transfers(state: tauri::State<AppState>) -> Vec<ChatMessage> {
-    let s = state.0.lock().unwrap();
+    let s = lock_state(&state.0);
     let mut all: Vec<ChatMessage> = s
         .messages
         .values()
@@ -256,7 +264,7 @@ fn list_transfers(state: tauri::State<AppState>) -> Vec<ChatMessage> {
 /// 最近会话列表（移动端"消息"页用）
 #[tauri::command]
 fn list_sessions(state: tauri::State<AppState>) -> serde_json::Value {
-    let s = state.0.lock().unwrap();
+    let s = lock_state(&state.0);
     let mut out = Vec::new();
     for (uid, list) in s.messages.iter() {
         if let Some(last) = list.last() {
@@ -489,6 +497,90 @@ fn refresh_peers(state: tauri::State<AppState>) {
     discovery::refresh(&state.0.clone());
 }
 
+/// 网络诊断：用户反馈"发现不了"时，前端调用本命令展示实况，
+/// 把"环境问题"（防火墙/权限/AP 隔离/不同网段）与"代码问题"区分开。
+#[tauri::command]
+fn net_diag(state: tauri::State<AppState>) -> serde_json::Value {
+    let s = lock_state(&state.0);
+    let mut hints: Vec<String> = Vec::new();
+    if !s.listener_ok {
+        hints.push(format!(
+            "发现端口 UDP {} 未绑定成功：可能被其他软件占用，程序会持续重试",
+            DISCOVERY_PORT
+        ));
+    }
+    if s.udp_sent == 0 {
+        hints.push("尚未发出任何广播：请确认状态不是「隐身」".to_string());
+    }
+    if s.udp_recv == 0 && s.peers.is_empty() {
+        hints.push(format!(
+            "未收到任何广播：请确认对端已打开本软件且与本机在同一网段（本机 IP {}）",
+            local_ip()
+        ));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        hints.push("macOS 请检查：系统设置 > 隐私与安全性 > 本地网络，是否允许「鸿升飞书」".to_string());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let fw_ok = network::firewall::rules_present();
+        if !fw_ok {
+            hints.push("Windows 防火墙未放行本程序：默认会静默拦截入站广播，请点「一键修复」".to_string());
+        }
+    }
+    hints.push("路由器若开启了「AP 隔离/客户机隔离」，任何软件都无法互相发现，需在路由器后台关闭".to_string());
+
+    #[cfg(target_os = "windows")]
+    let firewall_ok = network::firewall::rules_present();
+    #[cfg(not(target_os = "windows"))]
+    let firewall_ok = true;
+
+    serde_json::json!({
+        "ip": local_ip(),
+        "host": host_name(),
+        "os": os_name(),
+        "udp_port": DISCOVERY_PORT,
+        "tcp_port": TCP_PORT,
+        "self_port": s.self_port,
+        "listener_ok": s.listener_ok,
+        "udp_sent": s.udp_sent,
+        "udp_recv": s.udp_recv,
+        "peers": s.peers.len(),
+        "targets": discovery::broadcast_targets_debug(),
+        "firewall_ok": firewall_ok,
+        "hints": hints,
+    })
+}
+
+/// 一键修复 Windows 防火墙（提权执行 netsh，弹 UAC）
+#[tauri::command]
+fn fix_firewall() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        network::firewall::fix_firewall_elevated()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("仅 Windows 需要修复防火墙".to_string())
+    }
+}
+
+/// 打开系统防火墙设置页（手动放行入口）
+#[tauri::command]
+fn open_firewall_settings() {
+    #[cfg(target_os = "windows")]
+    {
+        network::firewall::open_firewall_settings();
+    }
+}
+
+/// 关闭防火墙提示条（本次运行内不再自动弹出）
+#[tauri::command]
+fn dismiss_firewall_notice(state: tauri::State<AppState>) {
+    lock_state(&state.0).fw_hint_shown = true;
+}
+
 // ---- 应用装配 ----
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -539,7 +631,7 @@ pub fn run() {
                         "tray_quit" => {
                             if let Some(st) = app.try_state::<AppState>() {
                                 {
-                                    let mut s = st.0.lock().unwrap();
+                                    let mut s = lock_state(&st.0);
                                     s.running = false;
                                 }
                                 discovery::broadcast_bye(&st.0.clone());
@@ -590,6 +682,7 @@ pub fn run() {
             open_path, win_minimize, win_close,
             pick_directory, pick_files,
             open_chat_window, get_platform, refresh_peers,
+            net_diag, fix_firewall, open_firewall_settings, dismiss_firewall_notice,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

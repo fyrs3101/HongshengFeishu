@@ -16,14 +16,26 @@ use zip::ZipWriter;
 
 use crate::network::discovery;
 use crate::network::protocol::*;
-use crate::state::{AppState, InnerState, PendingOffer};
+use crate::state::{lock_state, AppState, InnerState, PendingOffer};
 
 const CHUNK_SIZE: usize = 48 * 1024; // base64 编码前的原始分片大小
 
-/// 启动 TCP 监听（系统分配端口，端口随广播通告）
+/// 绑定 TCP 监听：优先固定端口 24681（与飞鸽传书一致；
+/// 固定端口让 Windows 防火墙规则可以按端口书写，也消除首帧通告
+/// 端口为 0 的竞态）。固定端口被占用时回退到系统临时端口，
+/// 保证进程始终具备收文件/收消息的能力（实际端口由调用方写回
+/// self_port 并重新广播）。
+fn bind_listener() -> std::io::Result<TcpListener> {
+    match TcpListener::bind(("0.0.0.0", TCP_PORT)) {
+        Ok(l) => Ok(l),
+        Err(_) => TcpListener::bind(("0.0.0.0", 0)),
+    }
+}
+
+/// 启动 TCP 监听（固定端口 24681，失败回退临时端口）
 pub fn start_listener(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
     thread::spawn(move || {
-        let listener = match TcpListener::bind(("0.0.0.0", 0)) {
+        let listener = match bind_listener() {
             Ok(l) => l,
             Err(e) => {
                 eprintln!("[transfer] 监听失败: {}", e);
@@ -31,9 +43,15 @@ pub fn start_listener(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
             }
         };
         let port = listener.local_addr().map(|a| a.port()).unwrap_or(0);
-        state.lock().unwrap().self_port = port;
+        {
+            let mut s = lock_state(&state);
+            s.self_port = port;
+        }
+        // 端口可能与预设值不同（回退场景）：立即重新广播一次，
+        // 让对端在 3 秒周期到来前就拿到正确端口
+        discovery::refresh(&state);
         for stream in listener.incoming() {
-            if !state.lock().unwrap().running {
+            if !lock_state(&state).running {
                 break;
             }
             if let Ok(mut s) = stream {
@@ -75,7 +93,7 @@ fn handle_incoming(stream: &mut TcpStream, app: tauri::AppHandle, state: Arc<Mut
                 };
                 notify_incoming(&app, &state, &nick, &notice);
                 // 回执：告诉对方消息已送达
-                let peer_port = state.lock().unwrap().peers.get(&from).map(|p| (p.ip.clone(), p.port));
+                let peer_port = lock_state(&state).peers.get(&from).map(|p| (p.ip.clone(), p.port));
                 let target = match peer_port {
                     Some((ip, port)) => Some((ip, port)),
                     None => sender_addr.map(|a| (a.ip().to_string(), a.port())),
@@ -93,7 +111,7 @@ fn handle_incoming(stream: &mut TcpStream, app: tauri::AppHandle, state: Arc<Mut
                 is_dir,
             } => {
                 let (auto_accept, inbox) = {
-                    let s = state.lock().unwrap();
+                    let s = lock_state(&state);
                     (s.settings.auto_accept, s.inbox_dir.clone())
                 };
 
@@ -103,7 +121,7 @@ fn handle_incoming(stream: &mut TcpStream, app: tauri::AppHandle, state: Arc<Mut
                     // 弹窗等待用户确认（120 秒超时按拒绝处理）
                     let (tx, rx) = channel();
                     {
-                        let mut s = state.lock().unwrap();
+                        let mut s = lock_state(&state);
                         s.pending_offers.insert(
                             transfer_id.clone(),
                             PendingOffer {
@@ -151,7 +169,7 @@ fn handle_incoming(stream: &mut TcpStream, app: tauri::AppHandle, state: Arc<Mut
                         };
                         upsert_message(&state, &msg);
                         let _ = app.emit("message", msg);
-                        if let Some(peer) = state.lock().unwrap().peers.get(&from).cloned() {
+                        if let Some(peer) = lock_state(&state).peers.get(&from).cloned() {
                             let tid = transfer_id.clone();
                             let _ = thread::spawn(move || send_reject(&peer.ip, peer.port, &tid));
                         }
@@ -227,7 +245,7 @@ fn handle_incoming(stream: &mut TcpStream, app: tauri::AppHandle, state: Arc<Mut
                 }
             }
             Frame::Reject { transfer_id } => {
-                state.lock().unwrap().rejected.insert(transfer_id.clone());
+                lock_state(&state).rejected.insert(transfer_id.clone());
                 update_progress(&state, &app, &transfer_id, 0, "rejected", 0, 0);
             }
         }
@@ -235,7 +253,7 @@ fn handle_incoming(stream: &mut TcpStream, app: tauri::AppHandle, state: Arc<Mut
 }
 
 fn find_file_name(state: &Arc<Mutex<InnerState>>, transfer_id: &str) -> Option<String> {
-    let s = state.lock().unwrap();
+    let s = lock_state(&state);
     for list in s.messages.values() {
         if let Some(m) = list.iter().find(|m| m.transfer_id == transfer_id) {
             return Some(m.file_name.clone());
@@ -280,7 +298,7 @@ pub fn send_text(
         .cloned()
         .ok_or_else(|| "对方不在线".to_string())?;
     let (self_uid, self_nick) = {
-        let s = state.lock().unwrap();
+        let s = lock_state(&state);
         (s.self_uid.clone(), s.settings.nick.clone())
     };
     // 先单播 hello，确保隐身方/新联系人也知道我们的端口
@@ -329,7 +347,7 @@ pub fn send_file(
         .cloned()
         .ok_or_else(|| "对方不在线".to_string())?;
     let (self_uid, self_nick) = {
-        let s = state.lock().unwrap();
+        let s = lock_state(&state);
         (s.self_uid.clone(), s.settings.nick.clone())
     };
     discovery::unicast_hello(&state, &peer.ip);
@@ -406,8 +424,8 @@ pub fn send_file(
 
     loop {
         // 对方拒绝 → 中止
-        if state.lock().unwrap().rejected.contains(&transfer_id) {
-            state.lock().unwrap().rejected.remove(&transfer_id);
+        if lock_state(&state).rejected.contains(&transfer_id) {
+            lock_state(&state).rejected.remove(&transfer_id);
             update_progress(&state, &app, &transfer_id, 0, "rejected", 0, 0);
             if is_dir {
                 let _ = fs::remove_file(&send_path);
@@ -486,7 +504,7 @@ pub fn push_file_chunk(
     data: String,
 ) -> Result<(), String> {
     let path = {
-        let s = state.0.lock().unwrap();
+        let s = lock_state(&state.0);
         s.staging.get(&transfer_id).cloned()
     }
     .ok_or_else(|| "传输不存在".to_string())?;
@@ -506,7 +524,7 @@ pub fn finish_file_bytes(
     peer_uid: String,
 ) -> Result<String, String> {
     let path = {
-        let mut s = state.0.lock().unwrap();
+        let mut s = lock_state(&state.0);
         s.staging.remove(&transfer_id)
     }
     .ok_or_else(|| "传输不存在".to_string())?;
@@ -536,7 +554,7 @@ fn send_reject(ip: &str, port: u16, transfer_id: &str) {
 }
 
 fn upsert_message(state: &Arc<Mutex<InnerState>>, msg: &ChatMessage) {
-    let mut s = state.lock().unwrap();
+    let mut s = lock_state(&state);
     let list = s.messages.entry(msg.peer_uid.clone()).or_insert_with(Vec::new);
     if let Some(existing) = list.iter_mut().find(|m| m.id == msg.id) {
         *existing = msg.clone();
@@ -556,7 +574,7 @@ fn update_progress(
     eta_secs: u64,
 ) {
     let found = {
-        let mut s = state.lock().unwrap();
+        let mut s = lock_state(&state);
         let mut hit: Option<ChatMessage> = None;
         for list in s.messages.values_mut() {
             if let Some(m) = list.iter_mut().find(|m| m.transfer_id == transfer_id) {
@@ -579,7 +597,7 @@ fn update_progress(
 
 fn mark_delivered(state: &Arc<Mutex<InnerState>>, app: &tauri::AppHandle, msg_id: &str) {
     let found = {
-        let mut s = state.lock().unwrap();
+        let mut s = lock_state(&state);
         let mut hit: Option<ChatMessage> = None;
         for list in s.messages.values_mut() {
             if let Some(m) = list.iter_mut().find(|m| m.id == msg_id) {
