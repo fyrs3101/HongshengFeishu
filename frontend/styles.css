@@ -925,7 +925,10 @@ body.plat-linux .gly-win {
 /* ---------- 拖拽蒙层 ---------- */
 .drop-mask {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 20;
   display: none;
   align-items: center;
@@ -948,7 +951,10 @@ body.plat-linux .gly-win {
    ============================================================ */
 .modal-mask {
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 200;
   display: flex;
   align-items: center;
@@ -1264,7 +1270,10 @@ body.plat-linux .gly-win {
 }
 .switch .sl {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   border-radius: 24px;
   background: #d4dbe6;
   cursor: pointer;
@@ -1609,7 +1618,10 @@ body.plat-linux .gly-win {
   .tab-page {
     display: none;
     position: absolute;
-    inset: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     flex-direction: column;
     background: #f4f6f9;
   }
@@ -1905,7 +1917,10 @@ body.plat-linux .gly-win {
   /* ---------- 全屏聊天覆盖层（蓝色顶栏对标飞鸽） ---------- */
   .chat-overlay {
     position: fixed;
-    inset: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: 100;
     display: none;
     flex-direction: column;
@@ -1959,7 +1974,10 @@ body.plat-linux .gly-win {
   /* ---------- 底部联系人选择弹层（选完文件后选人，对标飞鸽） ---------- */
   .sheet-mask {
     position: fixed;
-    inset: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: 250;
     background: rgba(15, 23, 42, 0.45);
     display: flex;
@@ -2041,7 +2059,10 @@ body.plat-linux .gly-win {
   .splash {
     display: flex;
     position: fixed;
-    inset: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
     z-index: 300;
     flex-direction: column;
     align-items: center;

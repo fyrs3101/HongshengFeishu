@@ -5,6 +5,14 @@
 
 > 这是用 **Tauri v2**（Rust 后端 + Web 前端）重写的版本，一套代码产出 macOS / Windows / Android 三端。
 
+## v1.3.3 修复记录（2026-10-16）
+
+> 本版针对真机截图反馈「手机端完全不适配」——启动页浮层斜压主界面。根因：旧版 Android WebView（Chrome 87 之前）不支持 `inset` 定位简写，`position:fixed` 元素退回静态位置且尺寸收缩为内容大小，启动页/弹层/聊天浮层/ Tab 页全部错位。
+
+- **全项目 7 处 `inset: 0` 改为显式 `top/right/bottom/left: 0`**（`.splash` 启动页、`.chat-overlay` 聊天浮层、`.sheet-mask` 选人弹层、`.modal-mask` 模态、`.tab-page`  Tab 页、`.drop-mask` 拖拽蒙层、`.switch .sl` 开关滑块）——显式四边定位在所有 WebView 版本行为一致；
+- 沙箱移动端回归（华为 Mate 60 视口 393×852）：启动页全屏覆盖 → 点击进入正常隐藏 → 飞鸽/消息/文件/我的四 Tab 全部正常激活 → 文件页四宫格（图片/音乐/视频/文档）完整渲染 → 浮层定位四边 0px → 零 JS 错误；
+- 若用户的 Android System WebView 过旧（Chrome 84 之前，连 flex/grid `gap` 也不支持），间距会退化但功能可用——升级系统 WebView 或使用较新机型即可获得完整效果。
+
 ## v1.3.2 修复记录（2026-10-16，已上线）
 
 > 本版针对实测反馈「Mac 端不能发信息，发信息提示错误」。沙箱端到端复现 + 单元测试定位到三类根因并全部修复。
@@ -95,12 +103,12 @@ cargo tauri build
 打标签即自动触发：
 
 ```bash
-git tag v1.3.2 && git push origin v1.3.2
+git tag v1.3.3 && git push origin v1.3.3
 # 到 GitHub → Releases → 下载：
-#   HongshengFeishu-1.3.2-macOS-arm64.dmg / .app.tar.gz
-#   HongshengFeishu-1.3.2-windows-x64-portable.exe（免安装单机版，双击即用）
-#   HongshengFeishu-1.3.2-windows-x64-setup.exe（传统安装版）
-#   HongshengFeishu-1.3.2-android.apk（华为等手机开启"旁加载"即可安装）
+#   HongshengFeishu-1.3.3-macOS-arm64.dmg / .app.tar.gz
+#   HongshengFeishu-1.3.3-windows-x64-portable.exe（免安装单机版，双击即用）
+#   HongshengFeishu-1.3.3-windows-x64-setup.exe（传统安装版）
+#   HongshengFeishu-1.3.3-android.apk（华为等手机开启"旁加载"即可安装）
 ```
 
 ### 3. 沙箱里我能验证什么
