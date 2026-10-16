@@ -5,6 +5,16 @@
 
 > 这是用 **Tauri v2**（Rust 后端 + Web 前端）重写的版本，一套代码产出 macOS / Windows / Android 三端。
 
+## v1.3.2 修复记录（2026-10-16）
+
+> 本版针对实测反馈「Mac 端不能发信息，发信息提示错误」。沙箱端到端复现 + 单元测试定位到三类根因并全部修复。
+
+- **Mutex 中毒锁残留（代码级静默死亡）** —— v1.3.1 的防毒化改造用单行 sed 替换，漏掉了 7 处**跨行写法**（`state\n.lock()\n.unwrap()`），其中 `send_text` / `send_file` 的 peer 查询正在发送路径上：任一线程持锁 panic 后，这几处会级联 panic，表现为"能发现对方、一发送就报错"。修复：全项目零残留 `lock().unwrap()`，统一走 `lock_state()`；
+- **对端端口为 0 / 陈旧时连接必败** —— 旧版（≤v1.3.0）对端启动头几秒广播 `port:0`，直接入表后发送侧 connect 到端口 0 必然报 `Invalid argument`。修复：① 发现层端口防护（`port:0` 帧保留已知端口，新条目用固定端口兜底）；② 发送侧 `connect_peer()`：候选端口 = 对端通告端口 → 固定端口 24681 逐个尝试；
+- **连接失败提示无法自排查** —— 旧文案只有 `连接失败: {}`，用户无从判断是防火墙、权限还是版本问题。新版文案带目标 `IP:端口` 与三步排查指引（Windows 一键修复防火墙 → 双方网络诊断 → 对端升级）；同时连接超时收紧为 8 秒（macOS 对被防火墙丢弃的 SYN 默认要等约 75 秒才报错，期间界面像卡死）；
+- **net_diag 增补**：新增「能看到对方却发不出消息」场景指引；诊断弹层新增「对端地址」行（IP:端口 + 系统），便于截图回报定位。
+- 测试：3 个 Rust 单元测试覆盖 `connect_peer` 错误文案 / 端口 0 兜底 / 非法地址；沙箱 E2E——伪造对端完整走通「UDP 发现 → TCP 发送 → 回执 → 已送达」闭环；port:0 窗口期内发送不再报错（旧版此处必崩）。
+
 ## v1.3.1 修复记录（2026-10-16，已上线）
 
 > 本版针对实测反馈「三端彼此不能发现，无论自动还是刷新都不能发现」「Windows 关闭区域按钮看不清」两项问题。
@@ -85,12 +95,12 @@ cargo tauri build
 打标签即自动触发：
 
 ```bash
-git tag v1.3.1 && git push origin v1.3.1
+git tag v1.3.2 && git push origin v1.3.2
 # 到 GitHub → Releases → 下载：
-#   HongshengFeishu-1.3.1-macOS-arm64.dmg / .app.tar.gz
-#   HongshengFeishu-1.3.1-windows-x64-portable.exe（免安装单机版，双击即用）
-#   HongshengFeishu-1.3.1-windows-x64-setup.exe（传统安装版）
-#   HongshengFeishu-1.3.1-android.apk（华为等手机开启"旁加载"即可安装）
+#   HongshengFeishu-1.3.2-macOS-arm64.dmg / .app.tar.gz
+#   HongshengFeishu-1.3.2-windows-x64-portable.exe（免安装单机版，双击即用）
+#   HongshengFeishu-1.3.2-windows-x64-setup.exe（传统安装版）
+#   HongshengFeishu-1.3.2-android.apk（华为等手机开启"旁加载"即可安装）
 ```
 
 ### 3. 沙箱里我能验证什么

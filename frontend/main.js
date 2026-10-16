@@ -538,6 +538,14 @@
       HSF.toast("诊断失败：" + e);
       return;
     }
+    const peerDetail = (d.peer_list || [])
+      .map(
+        (p) =>
+          `${HSF.escapeHtml(p.nick || "")} · ${HSF.escapeHtml(p.ip || "")}:${
+            p.port
+          } · ${HSF.escapeHtml(HSF.osLabel(p.os))}`
+      )
+      .join("<br>");
     const rows = [
       ["本机 IP", HSF.escapeHtml(d.ip || "")],
       ["操作系统", HSF.escapeHtml(HSF.osLabel(d.os))],
@@ -547,6 +555,7 @@
       ["已发广播", `${d.udp_sent} 帧`],
       ["已收广播", `${d.udp_recv} 帧`],
       ["在线联系人", `${d.peers} 人`],
+      ["对端地址", peerDetail || "—"],
       ["防火墙放行", d.firewall_ok ? "已放行" : "未放行"],
       ["广播目标", (d.targets || []).map((t) => HSF.escapeHtml(t)).join("<br>")],
     ];

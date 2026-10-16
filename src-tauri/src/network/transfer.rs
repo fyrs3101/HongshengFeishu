@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{IpAddr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
@@ -282,6 +282,35 @@ fn resolve_save_path(inbox: &str, name: &str, hint: Option<&str>) -> String {
 
 // ---- 发送侧 ----
 
+/// 连接对端 TCP：优先对端通告端口，失败时回退固定端口 24681
+/// （对端是旧版首帧 port:0、或端口已变化时兜底）。
+///
+/// 连接超时 8 秒：被防火墙静默丢弃的 SYN 在 macOS 上默认要约 75 秒
+/// 才返回超时，期间界面像卡死；超时后直接给出可操作的排查文案，
+/// 让用户能自判是环境问题（防火墙/权限）还是版本问题。
+fn connect_peer(peer: &Peer) -> Result<TcpStream, String> {
+    let ip: IpAddr = peer
+        .ip
+        .parse()
+        .map_err(|_| format!("对端地址无效：{}", peer.ip))?;
+    let mut candidates: Vec<u16> = Vec::new();
+    if peer.port != 0 && peer.port != TCP_PORT {
+        candidates.push(peer.port);
+    }
+    candidates.push(TCP_PORT);
+    let mut last_err = String::from("无可用连接目标");
+    for port in candidates {
+        match TcpStream::connect_timeout(&SocketAddr::new(ip, port), Duration::from_secs(8)) {
+            Ok(s) => return Ok(s),
+            Err(e) => last_err = format!("{}:{}（{}）", peer.ip, port, e),
+        }
+    }
+    Err(format!(
+        "连接失败：无法连接 {}（{}）。请按序排查：① 对方若是 Windows，请其在鸿升飞书里点「一键修复防火墙」或运行网络诊断；② 双方都点主界面「发现不了？点此排查」；③ 对方若是 v1.3.1 之前的旧版，请升级到 v1.3.2",
+        peer.ip, last_err
+    ))
+}
+
 /// 发送文本；pass 为 Some 时按口令加密
 pub fn send_text(
     app: tauri::AppHandle,
@@ -290,9 +319,7 @@ pub fn send_text(
     text: String,
     pass: Option<String>,
 ) -> Result<String, String> {
-    let peer = state
-        .lock()
-        .unwrap()
+    let peer = lock_state(&state)
         .peers
         .get(&peer_uid)
         .cloned()
@@ -312,8 +339,7 @@ pub fn send_text(
         _ => (text.clone(), None),
     };
 
-    let mut stream =
-        TcpStream::connect((peer.ip.as_str(), peer.port)).map_err(|e| format!("连接失败: {}", e))?;
+    let mut stream = connect_peer(&peer)?;
     write_frame(
         &mut stream,
         &Frame::Text {
@@ -339,9 +365,7 @@ pub fn send_file(
     peer_uid: String,
     path: String,
 ) -> Result<String, String> {
-    let peer = state
-        .lock()
-        .unwrap()
+    let peer = lock_state(&state)
         .peers
         .get(&peer_uid)
         .cloned()
@@ -379,8 +403,7 @@ pub fn send_file(
         .len();
     let transfer_id = gen_uid();
 
-    let mut stream = TcpStream::connect((peer.ip.as_str(), peer.port))
-        .map_err(|e| format!("连接失败: {}", e))?;
+    let mut stream = connect_peer(&peer)?;
     write_frame(
         &mut stream,
         &Frame::FileMeta {
@@ -488,10 +511,7 @@ pub fn begin_file_bytes(state: tauri::State<AppState>, name: String) -> Result<S
     let transfer_id = gen_uid();
     let tmp = std::env::temp_dir().join(format!("hsfs-up-{}-{}", transfer_id, sanitize(&name)));
     fs::File::create(&tmp).map_err(|e| format!("创建暂存文件失败: {}", e))?;
-    state
-        .0
-        .lock()
-        .unwrap()
+    lock_state(&state.0)
         .staging
         .insert(transfer_id.clone(), tmp);
     Ok(transfer_id)
@@ -751,3 +771,51 @@ pub fn open_path(path: &str) -> Result<(), String> {
 
 #[allow(dead_code)]
 fn _unused(_p: PathBuf) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::network::protocol::Peer;
+
+    fn mk_peer(ip: &str, port: u16) -> Peer {
+        Peer {
+            uid: "test-peer".into(),
+            nick: "测试".into(),
+            group: "鸿升组".into(),
+            host: "TEST".into(),
+            ip: ip.to_string(),
+            port,
+            os: "linux".into(),
+            status: "online".into(),
+            last_seen: 0,
+        }
+    }
+
+    /// 两候选端口均无人监听时，错误文案必须带目标地址与可操作指引
+    /// （用户 toast 直接展示该文案，是自排查的关键）
+    #[test]
+    fn connect_peer_unreachable_gives_actionable_error() {
+        // 127.0.0.1:24698 无人监听；测试进程也不监听 24681 → 两候选均失败
+        let err = connect_peer(&mk_peer("127.0.0.1", 24698)).unwrap_err();
+        assert!(err.contains("无法连接"), "文案缺少场景描述: {}", err);
+        assert!(err.contains("127.0.0.1"), "文案缺少目标地址: {}", err);
+        assert!(err.contains("一键修复防火墙"), "文案缺少防火墙指引: {}", err);
+        assert!(err.contains("发现不了？点此排查"), "文案缺少诊断入口: {}", err);
+    }
+
+    /// 旧版对端首帧 port:0：候选必须跳过 0 直连固定端口，
+    /// 且错误信息里应出现固定端口 24681（证明走了兜底路径）
+    #[test]
+    fn connect_peer_zero_port_falls_back_to_fixed_port() {
+        let err = connect_peer(&mk_peer("127.0.0.1", 0)).unwrap_err();
+        assert!(err.contains("24681"), "未走固定端口兜底: {}", err);
+        assert!(!err.contains(":0（"), "错误里不应出现端口 0 目标: {}", err);
+    }
+
+    /// 地址非法时快速失败，不进入连接尝试
+    #[test]
+    fn connect_peer_bad_ip_fails_fast() {
+        let err = connect_peer(&mk_peer("not-an-ip", 24699)).unwrap_err();
+        assert!(err.contains("对端地址无效"), "{}", err);
+    }
+}

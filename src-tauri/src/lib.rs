@@ -235,10 +235,7 @@ fn set_alias(
 
 #[tauri::command]
 fn list_messages(state: tauri::State<AppState>, uid: String) -> Vec<ChatMessage> {
-    state
-        .0
-        .lock()
-        .unwrap()
+    lock_state(&state.0)
         .messages
         .get(&uid)
         .cloned()
@@ -334,10 +331,7 @@ fn respond_offer(
     accept: bool,
     save_path: Option<String>,
 ) -> Result<(), String> {
-    let offer = state
-        .0
-        .lock()
-        .unwrap()
+    let offer = lock_state(&state.0)
         .pending_offers
         .remove(&transfer_id)
         .ok_or_else(|| "该传输已过期或不存在".to_string())?;
@@ -518,6 +512,9 @@ fn net_diag(state: tauri::State<AppState>) -> serde_json::Value {
             local_ip()
         ));
     }
+    if !s.peers.is_empty() {
+        hints.push("能看到对方却发不出消息/文件：对方系统防火墙在拦截入站连接——Windows 让对方点「一键修复防火墙」；macOS 让对方在 系统设置 > 隐私与安全性 > 本地网络 中允许「鸿升飞书」".to_string());
+    }
     #[cfg(target_os = "macos")]
     {
         hints.push("macOS 请检查：系统设置 > 隐私与安全性 > 本地网络，是否允许「鸿升飞书」".to_string());
@@ -547,6 +544,13 @@ fn net_diag(state: tauri::State<AppState>) -> serde_json::Value {
         "udp_sent": s.udp_sent,
         "udp_recv": s.udp_recv,
         "peers": s.peers.len(),
+        "peer_list": s.peers.values().map(|p| serde_json::json!({
+            "nick": p.nick,
+            "ip": p.ip,
+            "port": p.port,
+            "os": p.os,
+            "status": p.status,
+        })).collect::<Vec<_>>(),
         "targets": discovery::broadcast_targets_debug(),
         "firewall_ok": firewall_ok,
         "hints": hints,

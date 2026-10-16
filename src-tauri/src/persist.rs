@@ -8,7 +8,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::network::protocol::ChatMessage;
-use crate::state::InnerState;
+use crate::state::{lock_state, InnerState};
 use tauri::Manager;
 
 /// 每个会话保留的最大消息条数（超出丢弃最旧）
@@ -34,7 +34,7 @@ pub fn load_messages(app: &tauri::AppHandle) -> HashMap<String, Vec<ChatMessage>
 pub fn save_messages(app: &tauri::AppHandle, state: &Arc<Mutex<InnerState>>) {
     let path = messages_path(app);
     let snapshot: HashMap<String, Vec<ChatMessage>> = {
-        let s = state.lock().unwrap();
+        let s = lock_state(&state);
         s.messages
             .iter()
             .map(|(k, v)| {
@@ -61,7 +61,7 @@ pub fn spawn_persister(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
         loop {
             thread::sleep(Duration::from_secs(3));
             let (dirty, running) = {
-                let mut s = state.lock().unwrap();
+                let mut s = lock_state(&state);
                 let d = s.messages_dirty;
                 s.messages_dirty = false;
                 (d, s.running)

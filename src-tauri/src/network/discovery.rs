@@ -230,13 +230,27 @@ pub fn start_discovery(app: tauri::AppHandle, state: Arc<Mutex<InnerState>>) {
                             continue;
                         }
 
+                        // 端口防护：旧版（≤v1.3.0）启动瞬间会通告 port:0，
+                        // 直接入表会让发送侧 connect 到端口 0 必然失败
+                        // （Invalid argument）。已有条目保留上次已知端口；
+                        // 全新条目用固定端口兜底（v1.3.1+ 对端均为固定端口）。
+                        let port = if ann.port == 0 {
+                            lock_state(&st_listen)
+                                .peers
+                                .get(&ann.uid)
+                                .map(|p| p.port)
+                                .filter(|p| *p != 0)
+                                .unwrap_or(TCP_PORT)
+                        } else {
+                            ann.port
+                        };
                         let peer = Peer {
                             uid: ann.uid.clone(),
                             nick: ann.nick.clone(),
                             group: ann.group.clone(),
                             host: ann.host.clone(),
                             ip,
-                            port: ann.port,
+                            port,
                             os: ann.os.clone(),
                             status: ann.status.clone(),
                             last_seen: now_ms(),
